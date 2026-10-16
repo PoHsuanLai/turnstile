@@ -5,9 +5,7 @@ name: ci
 # root service never links them) and the tests. The advisories check reads the RustSec database, so it
 # also runs once a week without a push: a new advisory against a locked dependency should not wait
 # for the next change. The device tests that need /dev/uinput are #[ignore]d and run by hand.
-#
-# Until the peephole dependency is a git revision (set by the orchestrator at landing), the workspace
-# does not resolve on CI alone: peephole is a path dependency on a sibling checkout.
+
 on:
   push:
   pull_request:

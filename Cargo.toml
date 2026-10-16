@@ -18,9 +18,9 @@ publish = false
 turnstile-wire = { path = "crates/turnstile-wire" }
 turnstile-client = { path = "crates/turnstile-client" }
 
-# Caller identity: the sibling lane's crates by path until the orchestrator pins a git rev at landing.
-peephole = { path = "../peephole/peephole" }
-peephole-core = { path = "../peephole/peephole-core", features = ["desktop"] }
+# Caller identity, by git tag (never a path).
+peephole = { git = "https://github.com/PoHsuanLai/peephole", tag = "v0.1.0" }
+peephole-core = { git = "https://github.com/PoHsuanLai/peephole", tag = "v0.1.0", features = ["desktop"] }
 
 thiserror = "2"
 # Sockets, poll and file system calls without `unsafe` (MIT OR Apache-2.0; `recv` returns a pair in 1.1).

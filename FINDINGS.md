@@ -52,9 +52,9 @@ Departures from the plan, standing facts and open items. An entry names the cond
 
 ## Unverified (nothing here was compiled or run; the gate checks each)
 
-1. peephole's API was read from the sibling lane's tree at its commit `e3f8ed3` (`peephole`,
-   `peephole-core`, `peephole-bus` as directories of one repository, so the dependencies are
-   `../peephole/peephole` and `../peephole/peephole-core` with feature `desktop`). The calls are
+1. peephole's API was read from the sibling lane's tree at its commit `e3f8ed3`; the dependency is
+   the git tag `v0.1.0` (`peephole` and `peephole-core` with feature `desktop`), commit `9cef560`,
+   which was not re-read after tagging. The calls are
    confined to `crates/turnstile/src/identity/peephole_authority.rs` and `policy.rs`:
    `Pinned::of_stream`, `Prober::system`, `Prober::probe`, `Prober::fs`, `TableFiles::desktop` and
    `TableFiles::load`, `judge`, `Standing::Service`, `roles::{PAD_DAEMON, KEYMAP_DAEMON}`. The lane
@@ -73,6 +73,15 @@ Departures from the plan, standing facts and open items. An entry names the cond
    caller, which is the intended fail-closed behaviour.
 6. SELinux on Fedora lets an unconfined service domain open `/dev/uinput` and `/proc/<pid>/exe` of a
    user process.
+
+## Deferred
+
+- **Socket peers are pinned with `Pin::Reopened`, not `Pin::AtConnect`.** `Pinned::of_stream` reads
+  `SO_PEERCRED`, opens a pidfd and re-reads to compare, because rustix 1.1.5 has no safe
+  `SO_PEERPIDFD`. The service therefore never asks for `PinNeed::AtConnect` (it judges a `Standing` and
+  needs `Proof::Exe`, not a pin level). The remaining gap is a connecting process that dies and has its
+  pid reused within the milliseconds before the pidfd opens. Closes when rustix gains the wrapper and
+  peephole returns `AtConnect`: then require it in `policy.rs`.
 
 ## Open items
 
