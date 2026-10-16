@@ -19,6 +19,15 @@ path = "src/lib.rs"
 name = "turnstile"
 path = "src/main.rs"
 
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
+required-features = ["fake"]
+
+[features]
+# The fake kernel and the fake identity, for tests only; a shipped build never enables it.
+fake = []
+
 [dependencies]
 turnstile-wire.workspace = true
 thiserror.workspace = true

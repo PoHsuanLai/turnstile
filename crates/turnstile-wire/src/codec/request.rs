@@ -69,8 +69,9 @@ fn read_events(r: &mut Reader<'_>, max: usize) -> Result<Vec<Event>, WireError> 
         });
     }
     Ok(rest
-        .chunks_exact(EVENT_BYTES)
-        .filter_map(|chunk| <&[u8; EVENT_BYTES]>::try_from(chunk).ok())
+        .as_chunks::<EVENT_BYTES>()
+        .0
+        .iter()
         .map(Event::from_bytes)
         .collect())
 }

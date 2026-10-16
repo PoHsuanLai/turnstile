@@ -49,9 +49,16 @@ impl Backend for UinputBackend {
 }
 
 /// A device made through the uinput node.
-#[derive(Debug)]
 pub struct UinputDevice {
     handle: UInputHandle<OwnedFd>,
+}
+
+impl std::fmt::Debug for UinputDevice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UinputDevice")
+            .field("fd", &self.handle.as_inner())
+            .finish()
+    }
 }
 
 impl Device for UinputDevice {

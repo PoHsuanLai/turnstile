@@ -2,6 +2,8 @@
 //! id cannot pass for another program); `peephole` judges it against the root-owned table of
 //! desktop programs; [`crate::policy`] decides what that program may have.
 
+// Test seams: never in a shipped build.
+#[cfg(any(test, feature = "fake"))]
 pub mod fake;
 pub mod peephole_authority;
 pub mod seat;

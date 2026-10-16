@@ -1,6 +1,8 @@
 //! The kernel's side: making a uinput device and writing events to it. A trait so the service is
 //! tested without a device; [`real`] is the one implementation that touches `/dev/uinput`.
 
+// Test seams: never in a shipped build.
+#[cfg(any(test, feature = "fake"))]
 pub mod fake;
 pub mod real;
 
