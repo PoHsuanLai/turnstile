@@ -1,0 +1,36 @@
+[package]
+name = "turnstile"
+description = "turnstile: the root service that makes palmrest's and keycap's virtual input devices, and no others"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "turnstile"
+path = "src/lib.rs"
+
+[[bin]]
+name = "turnstile"
+path = "src/main.rs"
+
+[dependencies]
+turnstile-wire.workspace = true
+thiserror.workspace = true
+rustix = { workspace = true, features = ["net", "event", "fs"] }
+input-linux.workspace = true
+listenfd.workspace = true
+libc.workspace = true
+peephole.workspace = true
+peephole-core.workspace = true
+
+[dev-dependencies]
+turnstile-client.workspace = true
+tempfile.workspace = true
+# Test seams (a fixture file tree standing for /proc and the table files); never in a shipped build.
+peephole = { workspace = true, features = ["fake"] }
