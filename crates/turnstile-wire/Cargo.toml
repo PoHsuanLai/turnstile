@@ -1,0 +1,15 @@
+[package]
+name = "turnstile-wire"
+description = "turnstile: the messages between the input-device service and its clients, and the fixed list of devices it will make"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
