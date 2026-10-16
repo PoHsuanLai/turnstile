@@ -1,0 +1,57 @@
+# turnstile: makes palmrest's and keycap's virtual input devices, and no others.
+# Install to /usr/lib/systemd/system (the vendor folder; /etc stays the administrator's). Started by
+# turnstile.socket; it exits by itself after 60 s with no connection.
+#
+# The one capability it keeps is CAP_SYS_PTRACE: reading /proc/<pid>/exe of another user's process
+# (palmrest) needs it, and without it a caller can only be told by its control group. Everything else
+# is closed: no network, no namespaces, no ptrace system call, no way to read or write another
+# process's memory, a read-only file system, and /dev/uinput as the only device.
+[Unit]
+Description=turnstile: virtual input devices for palmrest and keycap
+Documentation=https://github.com/PoHsuanLai/turnstile
+Requires=turnstile.socket
+After=turnstile.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/turnstile
+User=root
+UMask=0077
+
+CapabilityBoundingSet=CAP_SYS_PTRACE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+# /proc is needed for the caller's cgroup and image; read-only, so no /proc/<pid>/mem writes.
+ProtectProc=default
+ProcSubset=pid
+ReadOnlyPaths=/proc
+# Allow the usual service calls, then take away what a device broker never needs. ioctl stays: it is
+# how uinput is driven.
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources ptrace process_vm_readv process_vm_writev pidfd_getfd
+UnsetEnvironment=LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
+
+DevicePolicy=closed
+DeviceAllow=/dev/uinput rw
+
+# Sixteen connections of a few small buffers each; a descriptor per connection and up to four per
+# proxied device.
+MemoryMax=32M
+TasksMax=32
+LimitNOFILE=128

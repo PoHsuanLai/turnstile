@@ -1,0 +1,19 @@
+# turnstile: the socket of the input-device service. Install to /usr/lib/systemd/system.
+#
+# systemd owns the socket and starts turnstile.service on the first connection, so the service can
+# exit when idle and the next connection simply starts it again. Any local process may connect: who
+# may have a device is decided by the identity of the caller, never by this mode.
+[Unit]
+Description=turnstile: socket of the input-device service
+Documentation=https://github.com/PoHsuanLai/turnstile
+
+[Socket]
+ListenSequentialPacket=/run/turnstile/input.sock
+SocketMode=0666
+DirectoryMode=0755
+# Connections that wait while the service starts. The service caps its own live connections (16);
+# MaxConnections= would not, as it applies to Accept=yes sockets only.
+Backlog=32
+
+[Install]
+WantedBy=sockets.target

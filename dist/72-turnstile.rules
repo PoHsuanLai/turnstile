@@ -1,0 +1,10 @@
+# turnstile: /dev/uinput belongs to root. Install to /etc/udev/rules.d.
+#
+# Without this rule some desktops give the logged-in user access to /dev/uinput (the `uaccess` tag
+# that Steam and ydotool rules add), which lets any program of that user create a keyboard and type
+# into whatever has focus. With it only turnstile, running as root, can make input devices.
+#
+# The number matters: 72 runs after Steam's 60-steam-input.rules, which adds the tag, and before
+# systemd's 73-seat-late.rules, which applies it, so removing the tag here wins.
+# `static_node` gives the node this mode before the uinput module is loaded.
+KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0600", GROUP="root", TAG-="uaccess", OPTIONS+="static_node=uinput"
