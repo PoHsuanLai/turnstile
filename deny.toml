@@ -1,0 +1,49 @@
+# cargo-deny gates, both run in CI (.github/workflows/ci.yml):
+#
+#   cargo deny check licenses     a dependency whose licence is not listed fails the gate rather than
+#                                 being noticed later by someone reading Cargo.lock
+#   cargo deny check advisories   a dependency with a RustSec advisory (vulnerability, unmaintained
+#                                 crate, unsound code) or a yanked version fails the gate; turnstile
+#                                 runs as root and is built from this lock file
+#   cargo deny check bans sources nothing from an unknown registry or git repository
+
+[graph]
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+
+[advisories]
+version = 2
+yanked = "deny"
+# An advisory that does not apply is ignored by id, one entry each, with the reason beside it:
+#   { id = "RUSTSEC-0000-0000", reason = "why it does not reach us" },
+ignore = []
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "0BSD",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+# No copyleft at all: this service is linked by nobody, but it is shipped as a binary next to a
+# permissively licensed desktop, and GPL, AGPL and EUPL code would change what that may be.
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# The sibling path crates have no version; a path dependency is not a wildcard.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# Until the orchestrator pins peephole by git rev at landing, this list is empty on purpose: add the
+# repository here in the same commit that adds the dependency.
+allow-git = []
