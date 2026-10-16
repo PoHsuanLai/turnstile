@@ -1,8 +1,8 @@
 //! What palmrest and keycap link to ask the input-device service for a device.
 //!
 //! Sync and small: one `SOCK_SEQPACKET` connection, no bus, no async runtime. [`DeviceSource`] is the
-//! seam: [`Broker`] talks to the real service, [`fake::FakeSource`] is the double the callers'
-//! tests use.
+//! seam: [`Broker`] talks to the real service, `fake::FakeSource` (feature `fake`) is the double
+//! the callers' tests use.
 //!
 //! ```ignore
 //! let source = Broker::default();
@@ -15,6 +15,7 @@
 
 mod broker;
 mod error;
+#[cfg(feature = "fake")]
 pub mod fake;
 mod link;
 mod session;
@@ -22,4 +23,4 @@ mod session;
 pub use broker::{Broker, Connection, DEFAULT_SOCKET};
 pub use error::ClientError;
 pub use session::{DeviceSource, Made, Sent, Session};
-pub use turnstile_wire::{Create, DeviceId, Event, PointerCaps, Reason};
+pub use turnstile_wire::{AbsAxis, Create, Detail, DeviceId, Event, Kind, PointerCaps, Reason};

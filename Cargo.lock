@@ -370,7 +370,7 @@ checksum = "06bdbd8cfc056b8d2e2e85f29b56a3bdbecb527cef81eb39e3e7b98af4652770"
 
 [[package]]
 name = "turnstile"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "input-linux",
  "libc",
@@ -386,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "turnstile-client"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rustix",
  "tempfile",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "turnstile-wire"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "thiserror",
 ]

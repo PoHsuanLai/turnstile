@@ -45,10 +45,11 @@ Departures from the plan, standing facts and open items. An entry names the cond
    uinput positions; palmrest's spread of up to five contacts could exceed the range by a few units at
    an edge, and dropping half a frame is worse than moving a coordinate to the edge. A slot or a
    tracking id outside its range is refused.
-10. **`fake` code is compiled always.** `backend::fake`, `identity::fake`, `clock::ManualClock` and the
-    client's `fake` are small test doubles that the integration tests (a separate crate) and the
-    tests of palmrest and keycap need. A cargo feature would make `cargo test` skip the tests
-    silently when the feature is off. Nothing shipped calls them.
+10. **`fake` code is behind the `fake` feature.** The daemon's fake kernel and identity (since
+    v0.1.0) and the client's `fake` (since v0.1.1) are compiled only with `fake`, so a shipped build
+    cannot hold a stand-in for the service. palmrest and keycap name the feature on their
+    dev-dependency, so their tests always have it; this repo's gate runs `--all-features`, and a plain
+    `cargo test` skips the client's `fake` tests.
 
 ## Unverified (nothing here was compiled or run; the gate checks each)
 

@@ -11,6 +11,10 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# The stand-in for the service, for the callers' tests; a shipped build never enables it.
+fake = []
+
 [dependencies]
 turnstile-wire.workspace = true
 thiserror.workspace = true
