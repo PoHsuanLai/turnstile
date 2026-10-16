@@ -1,0 +1,56 @@
+name: ci
+
+# Linux checks: formatting, lints, licences and advisories of the dependencies, the crate boundaries
+# (scripts/check-boundary.sh: the wire and the client stay free of the bus and the async runtime, the
+# root service never links them) and the tests. The advisories check reads the RustSec database, so it
+# also runs once a week without a push: a new advisory against a locked dependency should not wait
+# for the next change. The device tests that need /dev/uinput are #[ignore]d and run by hand.
+#
+# Until the peephole dependency is a git revision (set by the orchestrator at landing), the workspace
+# does not resolve on CI alone: peephole is a path dependency on a sibling checkout.
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "23 5 * * 1"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: format
+        run: cargo fmt --all --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: crate boundaries
+        run: scripts/check-boundary.sh
+
+  # Licences, advisories, bans and sources of everything in Cargo.lock.
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: licences
+        run: cargo deny check licenses
+      - name: advisories
+        run: cargo deny check advisories
+      - name: bans and sources
+        run: cargo deny check bans sources
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: test
+        run: cargo test --workspace --locked
