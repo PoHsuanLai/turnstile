@@ -1,0 +1,20 @@
+[package]
+name = "turnstile-client"
+description = "turnstile: what palmrest and keycap link to ask the input-device service for a device"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+turnstile-wire.workspace = true
+thiserror.workspace = true
+rustix = { workspace = true, features = ["net", "event"] }
+
+[dev-dependencies]
+tempfile.workspace = true
