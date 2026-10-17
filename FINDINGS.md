@@ -11,6 +11,11 @@ Departures from the plan, standing facts and open items. An entry names the cond
    Mitigations are in the unit: no `ptrace`, `process_vm_*` or `pidfd_getfd` system call, a
    read-only `/proc`, no network, and a parser that takes only fixed-size fields. Closes if the owner
    decides the image check is not worth the capability.
+   The process's own `environ` is not read (NEW-FA-1, owner 2026-10-17): it is mode 0400 and owned
+   by the dynamic user, and the kernel checks that mode before ptrace access, so this capability
+   alone cannot open it. Opening it would take `CAP_DAC_READ_SEARCH` (every file) or reading the
+   process's memory (every process's); only root can set a system unit's environment, and the unit's
+   root-owned files must unset every loader variable, so the check is dropped instead.
 2. **keycap's identity is the strong one, the keyboard is handed over, the pad is proxied (owner,
    2026-10-16).** A uinput descriptor cannot be made write-only (the holder can destroy the device and
    set it up again with any capabilities), so a handed descriptor is only as safe as its holder.
