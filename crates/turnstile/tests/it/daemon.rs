@@ -34,7 +34,7 @@ fn listener(path: &Path) -> OwnedFd {
 
 /// Runs a daemon on a fresh socket; the receiver says when `run` returned.
 fn start(idle_ms: u64) -> (tempfile::TempDir, Broker, mpsc::Receiver<()>, FakeBackend) {
-    start_with(idle_ms, FixedAuthority::naming(palmrest(USER)))
+    start_with(idle_ms, FixedAuthority::naming(palmrest()))
 }
 
 /// Names the next peers in the order given, then `rest` for every one after.
@@ -126,7 +126,7 @@ fn a_flood_from_one_user_is_refused_after_its_own_slots_and_palmrest_still_gets_
         .collect();
     let authority = Scripted {
         next: Mutex::new(script),
-        rest: palmrest(USER),
+        rest: palmrest(),
     };
     let (_dir, broker, _finished, _kernel) = start_with(60_000, authority);
     let held: Vec<_> = (0..MAX_CONNECTIONS_PER_USER)

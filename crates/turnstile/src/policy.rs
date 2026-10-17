@@ -3,8 +3,11 @@
 //!
 //! | Kind | Role in the table | Strength | User | Control group |
 //! |---|---|---|---|---|
-//! | palmrest's | `pad_daemon` | unit | the seat's active user | a user unit `palmrest.service` of that user's manager |
+//! | palmrest's | `pad_daemon` | unit | not the seat's active user (it is a dynamic user) | exactly `/system.slice/palmrest.service` |
 //! | keycap's | `keymap_daemon` | unit | not the seat's active user (it is a dynamic user) | exactly `/system.slice/keycap.service` |
+//!
+//! Both are system services, so the control group is one only the system manager can fill; both are
+//! served before anyone is logged in.
 //!
 //! "Unit" is peephole's `Full`: a root-owned image in the table, a unit with a root-owned fragment
 //! and drop-ins that unsets every loader variable, and a process whose own environment holds none
@@ -16,8 +19,8 @@ use crate::identity::{ActiveUid, Caller, Credential, SeatSource, Strength};
 use peephole_core::roles::{KEYMAP_DAEMON, PAD_DAEMON};
 use turnstile_wire::{Kind, Owner};
 
-/// palmrest's unit.
-pub const PAD_UNIT: &str = "palmrest.service";
+/// palmrest's control group, which only a system service can have.
+pub const PAD_CGROUP: &str = "/system.slice/palmrest.service";
 /// keycap's control group, which only a system service can have.
 pub const KEYMAP_CGROUP: &str = "/system.slice/keycap.service";
 
@@ -37,10 +40,7 @@ pub enum Refusal {
     /// Proven by its control group or its image only: its unit was not shown to be the real one.
     #[error("its unit was not checked")]
     TooWeak,
-    /// Nobody is logged in, so there is no user whose program this could be.
-    #[error("no one is logged in")]
-    NoSeat,
-    /// Running as a user this program never runs as.
+    /// Running as the user at the seat, which these programs (dynamic users) never are.
     #[error("running as the wrong user")]
     WrongUser,
     /// Running in a control group this program never runs in.
@@ -88,9 +88,9 @@ impl Admission for AllowKinds {
 
 /// Whether `caller` may have a device of `kind` while `seat`'s user is active.
 pub fn authorise(kind: Kind, caller: &Caller, seat: ActiveUid) -> Result<(), Refusal> {
-    let (role, place) = match kind.owner() {
-        Owner::Palmrest => (PAD_DAEMON, Place::UserUnit),
-        Owner::Keycap => (KEYMAP_DAEMON, Place::SystemUnit),
+    let (role, cgroup) = match kind.owner() {
+        Owner::Palmrest => (PAD_DAEMON, PAD_CGROUP),
+        Owner::Keycap => (KEYMAP_DAEMON, KEYMAP_CGROUP),
         _ => return Err(Refusal::UnknownKind),
     };
     match &caller.credential {
@@ -105,43 +105,11 @@ pub fn authorise(kind: Kind, caller: &Caller, seat: ActiveUid) -> Result<(), Ref
         Credential::Listed { .. } => {}
         Credential::Unlisted => return Err(Refusal::Unlisted),
     }
-    match place {
-        Place::UserUnit => {
-            let active = seat.0.ok_or(Refusal::NoSeat)?;
-            if caller.uid != active {
-                return Err(Refusal::WrongUser);
-            }
-            if !in_user_unit(&caller.cgroup, active, PAD_UNIT) {
-                return Err(Refusal::WrongPlace);
-            }
-        }
-        Place::SystemUnit => {
-            if seat.0 == Some(caller.uid) {
-                return Err(Refusal::WrongUser);
-            }
-            if caller.cgroup != KEYMAP_CGROUP {
-                return Err(Refusal::WrongPlace);
-            }
-        }
+    if seat.0 == Some(caller.uid) {
+        return Err(Refusal::WrongUser);
+    }
+    if caller.cgroup != cgroup {
+        return Err(Refusal::WrongPlace);
     }
     Ok(())
-}
-
-/// Where a program's control group must be.
-#[derive(Debug, Clone, Copy)]
-enum Place {
-    /// Under the user's own manager.
-    UserUnit,
-    /// Directly under `system.slice`.
-    SystemUnit,
-}
-
-/// Whether `cgroup` is `unit` somewhere under `user`'s manager:
-/// `/user.slice/user-<uid>.slice/user@<uid>.service/<anything>/<unit>`.
-pub fn in_user_unit(cgroup: &str, uid: u32, unit: &str) -> bool {
-    let root = format!("/user.slice/user-{uid}.slice/user@{uid}.service/");
-    let leaf = cgroup
-        .strip_prefix(&root)
-        .map(|below| below.rsplit('/').next().unwrap_or(below));
-    leaf == Some(unit)
 }

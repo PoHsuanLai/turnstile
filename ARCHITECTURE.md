@@ -64,7 +64,7 @@ socket unit (systemd) --accept--> Daemon --thread--> serve(conn)
 
 | Kind | Role in the table | Proof | User | Control group |
 |---|---|---|---|---|
-| palmrest touchpad, wheel, keys | `pad_daemon` | the unit (`Full`) | the seat's active user | `.../user@<uid>.service/.../palmrest.service` |
+| palmrest touchpad, wheel, keys | `pad_daemon` | the unit (`Full`) | not the seat's active user (a dynamic user); allowed before anyone is logged in | exactly `/system.slice/palmrest.service` |
 | keycap keyboard, pointer | `keymap_daemon` | the unit (`Full`) | not the seat's active user (a dynamic user); allowed before anyone is logged in | exactly `/system.slice/keycap.service` |
 
 A caller is admitted only at peephole's `Full` proof (NEW-PI-4); the control group, or the group and
@@ -80,13 +80,10 @@ with its one capability:
 - nothing traces the process (`TracerPid` is 0);
 - the unit's `ExecStart=` program is one of the table row's.
 
-What this does not show is the manager's `MainPID`. For keycap the group can only be filled by the
-system manager, so it holds. For palmrest the user can fill a group of that name, and a copy of the
-genuine image started by hand with a clean environment, then traced after it has connected, still
-passes; it gets a touchpad, a wheel and keys that cannot type text, and casement classes the devices
-as virtual (NEW-PI-4, casement's half). The user's own unit folders are not read (the service cannot
-open a home folder); their effect shows in the process checks. Closing this fully needs the user
-manager's word (a different broker design) and is recorded in FINDINGS.
+What this does not show is the manager's `MainPID`. Both programs are system services, so the group
+can only be filled by the system manager, and a person's process cannot put itself in it. The user's own
+unit folders are not read (the service cannot open a home folder), and a user-manager unit is not
+admitted at all: the policy asks for a group under `/system.slice`.
 
 ## The ceilings (`turnstile-wire/src/ceiling/`)
 

@@ -13,6 +13,10 @@ use turnstile::serve::Context;
 pub(crate) const USER: u32 = 1000;
 /// keycap's dynamic user.
 pub(crate) const KEYCAP_UID: u32 = 61_234;
+/// palmrest's dynamic user.
+pub(crate) const PALMREST_UID: u32 = 61_235;
+/// palmrest's control group: a system service's.
+pub(crate) const PALMREST_CGROUP: &str = "/system.slice/palmrest.service";
 
 pub(crate) fn listed(role: &str, strength: Strength, uid: u32, cgroup: &str) -> Caller {
     let role = RoleName::new(role).expect("a valid role name");
@@ -25,13 +29,9 @@ pub(crate) fn listed(role: &str, strength: Strength, uid: u32, cgroup: &str) -> 
     }
 }
 
-pub(crate) fn palmrest_cgroup(uid: u32) -> String {
-    format!("/user.slice/user-{uid}.slice/user@{uid}.service/app.slice/palmrest.service")
-}
-
-/// The genuine palmrest of `uid`.
-pub(crate) fn palmrest(uid: u32) -> Caller {
-    listed("pad_daemon", Strength::Unit, uid, &palmrest_cgroup(uid))
+/// The genuine palmrest.
+pub(crate) fn palmrest() -> Caller {
+    listed("pad_daemon", Strength::Unit, PALMREST_UID, PALMREST_CGROUP)
 }
 
 /// The genuine keycap.

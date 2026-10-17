@@ -1,4 +1,4 @@
-use crate::support::{KEYCAP_UID, USER, keycap, palmrest};
+use crate::support::{KEYCAP_UID, PALMREST_UID, USER, keycap, palmrest};
 use turnstile::identity::{ActiveUid, Caller, Credential};
 use turnstile::slots::{Bucket, Client, NoSlot, Slots};
 use turnstile_wire::limits::{MAX_CONNECTIONS, MAX_CONNECTIONS_PER_USER, MAX_RESERVED_PER_CLIENT};
@@ -9,19 +9,16 @@ fn seat() -> ActiveUid {
 
 fn stranger(uid: u32) -> Caller {
     Caller {
+        uid,
         credential: Credential::Unlisted,
-        ..palmrest(uid)
+        ..palmrest()
     }
 }
 
 #[test]
 fn a_caller_that_passes_the_policy_has_a_reserve_and_anyone_else_a_user_pool() {
     let table: &[(&str, Caller, Bucket)] = &[
-        (
-            "palmrest",
-            palmrest(USER),
-            Bucket::Reserved(Client::Palmrest),
-        ),
+        ("palmrest", palmrest(), Bucket::Reserved(Client::Palmrest)),
         ("keycap", keycap(), Bucket::Reserved(Client::Keycap)),
         (
             "a stranger at the seat",
@@ -34,9 +31,20 @@ fn a_caller_that_passes_the_policy_has_a_reserve_and_anyone_else_a_user_pool() {
             Bucket::Stranger(2000),
         ),
         (
-            "palmrest of a user not at the seat",
-            palmrest(2000),
-            Bucket::Stranger(2000),
+            "palmrest's user is not a free pass",
+            Caller {
+                credential: Credential::Unlisted,
+                ..palmrest()
+            },
+            Bucket::Stranger(PALMREST_UID),
+        ),
+        (
+            "palmrest running as the person at the seat",
+            Caller {
+                uid: USER,
+                ..palmrest()
+            },
+            Bucket::Stranger(USER),
         ),
         (
             "keycap's user is not a free pass",

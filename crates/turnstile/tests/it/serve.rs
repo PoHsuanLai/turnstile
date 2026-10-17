@@ -8,9 +8,9 @@ use rustix::net::{
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use turnstile::backend::fake::Fate;
-use turnstile::identity::ActiveUid;
 use turnstile::identity::fake::FixedAuthority;
 use turnstile::identity::seat::FixedSeat;
+use turnstile::identity::{ActiveUid, Caller};
 use turnstile::serve::{Context, serve};
 use turnstile_client::{
     ClientError, Connection, Create, DeviceId, Event, Made, Reason, Sent, Session,
@@ -47,7 +47,7 @@ fn wheel() -> Vec<Event> {
 
 #[test]
 fn palmrest_gets_a_proxied_wheel_and_loses_it_when_it_hangs_up() {
-    let (ctx, kernel) = context(palmrest(USER));
+    let (ctx, kernel) = context(palmrest());
     let (mut client, thread) = connect(&ctx);
     let Made::Proxied(id) = client.create(&Create::wheel()).expect("created") else {
         panic!("a wheel is proxied");
@@ -91,7 +91,7 @@ fn keycap_gets_its_keyboard_as_a_descriptor_that_outlives_the_connection() {
 
 #[test]
 fn a_caller_asking_for_another_programs_device_is_refused_and_cut() {
-    let (ctx, kernel) = context(palmrest(USER));
+    let (ctx, kernel) = context(palmrest());
     let (mut client, thread) = connect(&ctx);
     let err = client.create(&Create::keyboard()).expect_err("refused");
     assert!(
@@ -103,8 +103,11 @@ fn a_caller_asking_for_another_programs_device_is_refused_and_cut() {
 }
 
 #[test]
-fn a_caller_who_is_not_at_the_seat_is_refused() {
-    let (ctx, _) = context(palmrest(USER + 1));
+fn a_palmrest_running_as_the_person_at_the_seat_is_refused() {
+    let (ctx, _) = context(Caller {
+        uid: USER,
+        ..palmrest()
+    });
     let (mut client, thread) = connect(&ctx);
     let err = client.create(&Create::wheel()).expect_err("refused");
     assert!(
@@ -177,7 +180,7 @@ fn next_reply(peer: &rustix::fd::OwnedFd) -> Reply {
 
 #[test]
 fn garbage_and_overlong_datagrams_end_the_connection_with_unknown() {
-    let (ctx, _) = context(palmrest(USER));
+    let (ctx, _) = context(palmrest());
     for datagram in [vec![0xff; 5], vec![1, 77], vec![0u8; MAX_DATAGRAM + 1]] {
         let (peer, thread) = raw(&ctx);
         send(&peer, &datagram, SendFlags::NOSIGNAL).expect("send");
@@ -193,7 +196,7 @@ fn garbage_and_overlong_datagrams_end_the_connection_with_unknown() {
 
 #[test]
 fn a_connection_that_asks_for_nothing_is_closed_after_the_handshake_timeout() {
-    let (ctx, _) = context(palmrest(USER));
+    let (ctx, _) = context(palmrest());
     let (peer, thread) = raw(&ctx);
     let started = Instant::now();
     assert_eq!(next_reply(&peer), Reply::Refused(Reason::Unknown));
@@ -207,7 +210,7 @@ fn a_connection_that_asks_for_nothing_is_closed_after_the_handshake_timeout() {
 
 #[test]
 fn a_connection_with_a_device_may_stay_silent() {
-    let (ctx, _) = context(palmrest(USER));
+    let (ctx, _) = context(palmrest());
     let (mut client, thread) = connect(&ctx);
     assert!(client.create(&Create::wheel()).is_ok());
     std::thread::sleep(Duration::from_millis(1_300));

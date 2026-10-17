@@ -1,6 +1,6 @@
-use crate::support::{KEYCAP_UID, USER, keycap, listed, palmrest, palmrest_cgroup};
+use crate::support::{KEYCAP_UID, PALMREST_CGROUP, PALMREST_UID, USER, keycap, listed, palmrest};
 use turnstile::identity::{ActiveUid, Caller, Credential, Strength};
-use turnstile::policy::{Refusal, authorise, in_user_unit};
+use turnstile::policy::{Refusal, authorise};
 use turnstile_wire::Kind;
 
 const PALMREST_KINDS: [Kind; 3] = [
@@ -18,7 +18,7 @@ fn seat(uid: Option<u32>) -> ActiveUid {
 fn the_genuine_programs_get_their_own_devices_and_only_those() {
     for kind in PALMREST_KINDS {
         assert_eq!(
-            authorise(kind, &palmrest(USER), seat(Some(USER))),
+            authorise(kind, &palmrest(), seat(Some(USER))),
             Ok(()),
             "{kind:?}"
         );
@@ -34,29 +34,28 @@ fn the_genuine_programs_get_their_own_devices_and_only_those() {
             "{kind:?}"
         );
         assert!(
-            authorise(kind, &palmrest(USER), seat(Some(USER))).is_err(),
+            authorise(kind, &palmrest(), seat(Some(USER))).is_err(),
             "palmrest asking for {kind:?}"
         );
     }
 }
 
 #[test]
-fn keycap_is_served_before_anyone_logs_in() {
+fn both_are_served_before_anyone_logs_in() {
     assert_eq!(
         authorise(Kind::KeycapKeyboard, &keycap(), seat(None)),
         Ok(())
     );
     assert_eq!(
-        authorise(Kind::PalmrestWheel, &palmrest(USER), seat(None)),
-        Err(Refusal::NoSeat)
+        authorise(Kind::PalmrestWheel, &palmrest(), seat(None)),
+        Ok(())
     );
 }
 
 #[test]
 fn refusals_table() {
     use Refusal::*;
-    let other_user_cgroup = palmrest_cgroup(1001);
-    let system_palmrest = "/system.slice/palmrest.service";
+    let user_palmrest = "/user.slice/user-1000.slice/user@1000.service/app.slice/palmrest.service";
     let user_keycap = "/user.slice/user-1000.slice/user@1000.service/app.slice/keycap.service";
     let table: Vec<(&str, Kind, Caller, ActiveUid, Refusal)> = vec![
         (
@@ -64,7 +63,7 @@ fn refusals_table() {
             Kind::PalmrestWheel,
             Caller {
                 credential: Credential::Unlisted,
-                ..palmrest(USER)
+                ..palmrest()
             },
             seat(Some(USER)),
             Unlisted,
@@ -72,7 +71,7 @@ fn refusals_table() {
         (
             "another role: the shell",
             Kind::PalmrestWheel,
-            listed("shell", Strength::Unit, USER, &palmrest_cgroup(USER)),
+            listed("shell", Strength::Unit, PALMREST_UID, PALMREST_CGROUP),
             seat(Some(USER)),
             WrongRole {
                 have: "shell".to_owned(),
@@ -81,7 +80,7 @@ fn refusals_table() {
         (
             "palmrest asks for keycap's keyboard",
             Kind::KeycapKeyboard,
-            palmrest(USER),
+            palmrest(),
             seat(Some(USER)),
             WrongRole {
                 have: "pad_daemon".to_owned(),
@@ -99,7 +98,12 @@ fn refusals_table() {
         (
             "palmrest proven by its control group only",
             Kind::PalmrestTouchpad,
-            listed("pad_daemon", Strength::Cgroup, USER, &palmrest_cgroup(USER)),
+            listed(
+                "pad_daemon",
+                Strength::Cgroup,
+                PALMREST_UID,
+                PALMREST_CGROUP,
+            ),
             seat(Some(USER)),
             TooWeak,
         ),
@@ -116,23 +120,40 @@ fn refusals_table() {
             TooWeak,
         ),
         (
-            "palmrest of a user who is not at the seat",
+            "palmrest running as the logged in user",
             Kind::PalmrestWheel,
-            palmrest(1001),
+            listed("pad_daemon", Strength::Unit, USER, PALMREST_CGROUP),
             seat(Some(USER)),
             WrongUser,
         ),
         (
-            "palmrest in another user's manager",
+            "palmrest as a user unit of the person",
             Kind::PalmrestWheel,
-            listed("pad_daemon", Strength::Unit, USER, &other_user_cgroup),
+            listed("pad_daemon", Strength::Unit, PALMREST_UID, user_palmrest),
             seat(Some(USER)),
             WrongPlace,
         ),
         (
-            "palmrest as a system service",
+            "palmrest in a lookalike system unit",
             Kind::PalmrestWheel,
-            listed("pad_daemon", Strength::Unit, USER, system_palmrest),
+            listed(
+                "pad_daemon",
+                Strength::Unit,
+                PALMREST_UID,
+                "/system.slice/palmrest.service/x",
+            ),
+            seat(Some(USER)),
+            WrongPlace,
+        ),
+        (
+            "palmrest in keycap's unit",
+            Kind::PalmrestWheel,
+            listed(
+                "pad_daemon",
+                Strength::Unit,
+                PALMREST_UID,
+                "/system.slice/keycap.service",
+            ),
             seat(Some(USER)),
             WrongPlace,
         ),
@@ -177,7 +198,6 @@ fn refusals_table() {
 /// as the right user; only the unit's proof is enough.
 #[test]
 fn only_a_proven_unit_gets_devices_whatever_the_place_is() {
-    let palmrest_at = palmrest_cgroup(USER);
     let table: &[(&str, Strength, Result<(), Refusal>)] = &[
         (
             "its control group only",
@@ -192,7 +212,7 @@ fn only_a_proven_unit_gets_devices_whatever_the_place_is() {
         ("its unit", Strength::Unit, Ok(())),
     ];
     for (name, strength, want) in table {
-        let pad = listed("pad_daemon", *strength, USER, &palmrest_at);
+        let pad = listed("pad_daemon", *strength, PALMREST_UID, PALMREST_CGROUP);
         let key = listed(
             "keymap_daemon",
             *strength,
@@ -213,61 +233,5 @@ fn only_a_proven_unit_gets_devices_whatever_the_place_is() {
                 "keycap, {name}, {kind:?}"
             );
         }
-    }
-}
-
-#[test]
-fn user_unit_paths() {
-    let root = "/user.slice/user-1000.slice/user@1000.service";
-    let table: &[(&str, String, bool)] = &[
-        (
-            "under app.slice",
-            format!("{root}/app.slice/palmrest.service"),
-            true,
-        ),
-        (
-            "directly under the manager",
-            format!("{root}/palmrest.service"),
-            true,
-        ),
-        (
-            "deeper",
-            format!("{root}/app.slice/x.slice/palmrest.service"),
-            true,
-        ),
-        (
-            "another unit",
-            format!("{root}/app.slice/other.service"),
-            false,
-        ),
-        (
-            "a longer name",
-            format!("{root}/app.slice/palmrest.service.d"),
-            false,
-        ),
-        (
-            "another user",
-            "/user.slice/user-1001.slice/user@1001.service/app.slice/palmrest.service".to_owned(),
-            false,
-        ),
-        (
-            "a scope inside the unit",
-            format!("{root}/app.slice/palmrest.service/x.scope"),
-            false,
-        ),
-        ("no leaf", format!("{root}/app.slice/"), false),
-        (
-            "the system",
-            "/system.slice/palmrest.service".to_owned(),
-            false,
-        ),
-        ("empty", String::new(), false),
-    ];
-    for (name, cgroup, want) in table {
-        assert_eq!(
-            in_user_unit(cgroup, 1000, "palmrest.service"),
-            *want,
-            "{name}"
-        );
     }
 }

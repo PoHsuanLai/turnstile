@@ -1,7 +1,7 @@
 //! The real authority over a fixture tree: the process behind the socket pair is this test process,
 //! the `/proc` and the table are a tree in memory.
 
-use crate::support::USER;
+use crate::support::{PALMREST_UID, USER};
 use peephole::{FixtureImage, FixtureProc, FixtureProcess, Prober, TableFiles};
 use peephole_core::{FileTrust, LOADER_VARIABLES, Pid, RoleName, Uid, Writer};
 use rustix::net::sockopt::socket_peercred;
@@ -230,11 +230,11 @@ fn a_listed_image_is_unit_strength_only_when_the_unit_and_the_process_both_check
     }
 }
 
-/// NEW-PI-4: a user's process that passes as palmrest by control group and genuine image, run with
-/// a loader variable, is refused; the real user unit is served.
+/// NEW-PI-4: a process that passes as palmrest by control group and genuine image, run with a loader
+/// variable, is refused; the real system unit is served.
 #[test]
-fn palmrest_is_served_only_as_its_proven_user_unit() {
-    let cgroup = "0::/user.slice/user-1000.slice/user@1000.service/app.slice/palmrest.service\n";
+fn palmrest_is_served_only_as_its_proven_system_unit() {
+    let cgroup = "0::/system.slice/palmrest.service\n";
     let image = || FixtureImage::Present("/usr/local/bin/palmrest", FileTrust::RootOnly);
     let unit = format!(
         "[Service]\nExecStart=/usr/local/bin/palmrest\nUnsetEnvironment={}\n",
@@ -243,7 +243,7 @@ fn palmrest_is_served_only_as_its_proven_user_unit() {
     let with_unit = || {
         proc_files(
             tree().file(
-                "/usr/lib/systemd/user/palmrest.service",
+                "/usr/lib/systemd/system/palmrest.service",
                 unit.clone(),
                 FileTrust::RootOnly,
             ),
@@ -268,9 +268,9 @@ fn palmrest_is_served_only_as_its_proven_user_unit() {
         let caller = authority(tree, cgroup, image())
             .identify(&socket())
             .expect("identified");
-        // The test process stands for the user at the seat, whatever its real number is.
+        // The test process stands for palmrest's dynamic user, whatever its real number is.
         let caller = turnstile::identity::Caller {
-            uid: USER,
+            uid: PALMREST_UID,
             ..caller
         };
         assert_eq!(
@@ -284,7 +284,7 @@ fn palmrest_is_served_only_as_its_proven_user_unit() {
 #[test]
 fn a_hidden_image_is_only_the_cgroup_strength_and_the_policy_refuses_it() {
     let conn = socket();
-    let cgroup = "0::/user.slice/user-1000.slice/user@1000.service/app.slice/palmrest.service\n";
+    let cgroup = "0::/system.slice/palmrest.service\n";
     let caller = authority(tree(), cgroup, FixtureImage::Hidden)
         .identify(&conn)
         .expect("identified");
@@ -297,7 +297,7 @@ fn a_hidden_image_is_only_the_cgroup_strength_and_the_policy_refuses_it() {
     );
     // Even in the right place and as the right user, a caller whose image was not read gets nothing.
     let caller = turnstile::identity::Caller {
-        uid: USER,
+        uid: PALMREST_UID,
         ..caller
     };
     assert_eq!(

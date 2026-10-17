@@ -5,8 +5,9 @@ Departures from the plan, standing facts and open items. An entry names the cond
 ## Decisions and departures
 
 1. **The service keeps `CAP_SYS_PTRACE` (owner, 2026-10-16).** Reading `/proc/<pid>/exe` of palmrest,
-   which runs as another user, needs it. Without it only the control group is available and any
-   process of the user that moves itself into `palmrest.service`'s group can make the pad devices.
+   which runs as another user (a dynamic user, since palmrest became a system service), needs it. Without
+   it only the control group is available; both groups are system ones now, so the image check is
+   defence in depth.
    Mitigations are in the unit: no `ptrace`, `process_vm_*` or `pidfd_getfd` system call, a
    read-only `/proc`, no network, and a parser that takes only fixed-size fields. Closes if the owner
    decides the image check is not worth the capability.
@@ -14,7 +15,8 @@ Departures from the plan, standing facts and open items. An entry names the cond
    2026-10-16).** A uinput descriptor cannot be made write-only (the holder can destroy the device and
    set it up again with any capabilities), so a handed descriptor is only as safe as its holder.
    keycap is a system service with a control group a user cannot enter, so it gets the fd. palmrest
-   runs as the user, so its events pass the ceiling one by one.
+   is a system service too since 2026-10-17 (owner decision) and its identity is as strong, but its
+   events still pass the ceiling one by one: the ceiling bounds what a bug in its input parsing can type.
 3. **No `RuntimeDirectory=` in the service unit.** The design listed it; stopping the service would
    delete `/run/turnstile`, and with it the socket systemd keeps for activation. The socket unit makes
    the folder (`DirectoryMode=0755`) and nothing else needs one.
@@ -53,10 +55,10 @@ Departures from the plan, standing facts and open items. An entry names the cond
 
 11. **Full proof for both clients (NEW-PI-4, 2026-10-17).** palmrest and keycap are admitted at peephole's
     `Full` only. With no manager to ask, `identity/unit_files` supplies the unit's facts from the unit
-    files and the process (ARCHITECTURE "Who may have what"). `MainPID` is taken as the caller's own pid:
-    a residual for palmrest, whose user-owned control group a same-user process can fill. Closes when
-    the broker can ask the user's manager (a design decision: a small helper in the user's session that
-    the root service trusts by pidfd, or palmrest moving to a system unit as keycap is).
+    files and the process (ARCHITECTURE "Who may have what"). `MainPID` is taken as the caller's own pid.
+    That was a residual for palmrest while it was a user unit (a same-user process could fill the
+    group); palmrest is a system unit since 2026-10-17 (`/system.slice/palmrest.service`, as keycap), so
+    it is closed: the group is the system manager's alone.
     A symlink as the unit's fragment reads as writable (a link's mode is 0777), so it is refused; our
     units are plain files.
 
