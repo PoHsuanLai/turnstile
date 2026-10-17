@@ -51,7 +51,21 @@ Departures from the plan, standing facts and open items. An entry names the cond
     dev-dependency, so their tests always have it; this repo's gate runs `--all-features`, and a plain
     `cargo test` skips the client's `fake` tests.
 
+11. **Full proof for both clients (NEW-PI-4, 2026-10-17).** palmrest and keycap are admitted at peephole's
+    `Full` only. With no manager to ask, `identity/unit_files` supplies the unit's facts from the unit
+    files and the process (ARCHITECTURE "Who may have what"). `MainPID` is taken as the caller's own pid:
+    a residual for palmrest, whose user-owned control group a same-user process can fill. Closes when
+    the broker can ask the user's manager (a design decision: a small helper in the user's session that
+    the root service trusts by pidfd, or palmrest moving to a system unit as keycap is).
+    A symlink as the unit's fragment reads as writable (a link's mode is 0777), so it is refused; our
+    units are plain files.
+
 ## Unverified (nothing here was compiled or run; the gate checks each)
+
+0. NEW-PI-4: `peephole` is now tag `v0.1.4` (Cargo.lock to be refreshed). The calls added are `UnitFacts`
+   (all fields public, no `non_exhaustive`), `Loader::from_unset`, `LOADER_VARIABLES`, `peephole::{dirs_trust,
+   weaker}` and `ProcFs::{read_file_capped, list_dir, trust_of}`; read from the sibling checkout at 5a2e742. That
+   a fixture `FixtureProc::file` overwrites an existing node (tests rely on it).
 
 1. peephole's API was read from the sibling lane's tree at its commit `e3f8ed3`; the dependency is
    the git tag `v0.1.0` (`peephole` and `peephole-core` with feature `desktop`), commit `9cef560`,

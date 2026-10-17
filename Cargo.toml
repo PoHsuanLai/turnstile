@@ -19,8 +19,8 @@ turnstile-wire = { path = "crates/turnstile-wire" }
 turnstile-client = { path = "crates/turnstile-client" }
 
 # Caller identity, by git tag (never a path).
-peephole = { git = "https://github.com/PoHsuanLai/peephole", tag = "v0.1.0" }
-peephole-core = { git = "https://github.com/PoHsuanLai/peephole", tag = "v0.1.0", features = ["desktop"] }
+peephole = { git = "https://github.com/PoHsuanLai/peephole", tag = "v0.1.4" }
+peephole-core = { git = "https://github.com/PoHsuanLai/peephole", tag = "v0.1.4", features = ["desktop"] }
 
 thiserror = "2"
 # Sockets, poll and file system calls without `unsafe` (MIT OR Apache-2.0; `recv` returns a pair in 1.1).

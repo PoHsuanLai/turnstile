@@ -7,6 +7,7 @@
 pub mod fake;
 pub mod peephole_authority;
 pub mod seat;
+pub mod unit_files;
 
 use peephole_core::RoleName;
 use std::os::fd::OwnedFd;
@@ -18,8 +19,9 @@ pub enum Strength {
     Cgroup,
     /// And its image: a root-owned file that is in the table.
     Image,
-    /// And the unit manager's own facts.
-    Manager,
+    /// And the unit: its files are root-owned, it unsets the loader variables, and the process
+    /// shows none of them (`peephole`'s `Full`).
+    Unit,
 }
 
 /// What the table says about a caller.

@@ -2,13 +2,16 @@
 //! them against the table. This is the one file that knows `peephole`'s types; everything else
 //! sees a [`Caller`].
 //!
-//! The service holds `CAP_SYS_PTRACE` so that the probe can read `/proc/<pid>/exe` of another user's
-//! process (palmrest). It never asks a unit manager: that would mean connecting to a socket the user
-//! controls from a root process, so the proof stops at the image (`Proof::Exe`).
+//! The service holds `CAP_SYS_PTRACE` so that the probe can read `/proc/<pid>/exe` and `environ` of
+//! another user's process. It never asks a unit manager (that would mean connecting to a socket the
+//! user controls from a root process), so the unit's facts come from the unit files and the
+//! process itself ([`super::unit_files`]). A listed program whose image checks out but whose unit
+//! does not stays at `Proof::Exe`, and the policy refuses it.
 
-use super::{Authority, Caller, Credential, IdentifyError, Strength};
+use super::{Authority, Caller, Credential, IdentifyError, Strength, unit_files};
+use crate::journal::{self, kv};
 use peephole::{Pinned, Prober, ProcFs, RealProc, TableFiles};
-use peephole_core::{Exe, Proof, Standing, judge};
+use peephole_core::{Exe, Facts, Proof, Standing, Table, judge};
 use std::os::fd::OwnedFd;
 
 /// Judges callers against the table on disk, through a view of `/proc` and the file system.
@@ -46,7 +49,7 @@ impl<P: ProcFs + 'static> Authority for PeepholeAuthority<P> {
             .files
             .load(self.prober.fs())
             .map_err(|e| IdentifyError::Table(e.to_string()))?;
-        let standing = judge(&facts, &table);
+        let (facts, standing) = self.prove_unit(&pinned, facts, &table);
         Ok(Caller {
             pid: facts.pid.get(),
             uid: facts.uid.get(),
@@ -60,6 +63,50 @@ impl<P: ProcFs + 'static> Authority for PeepholeAuthority<P> {
     }
 }
 
+impl<P: ProcFs> PeepholeAuthority<P> {
+    /// Judges `facts`; a listed service whose image checked out is judged again with the facts of
+    /// its unit, which is the only way to `Proof::Full`. When the unit cannot be shown the first
+    /// judgement stands (the policy refuses it) and the reason goes to the journal.
+    fn prove_unit(&self, pinned: &Pinned, facts: Facts, table: &Table) -> (Facts, Standing) {
+        let standing = judge(&facts, table);
+        let Standing::Service {
+            proof: Proof::Exe, ..
+        } = standing
+        else {
+            return (facts, standing);
+        };
+        match unit_files::facts(self.prober.fs(), facts.pid, &facts.cgroup) {
+            Ok(unit) => match self.prober.probe(pinned, Some(unit)) {
+                Ok(again) => {
+                    let judged = judge(&again, table);
+                    (again, judged)
+                }
+                Err(why) => {
+                    note_unproven(&facts, &why);
+                    (facts, standing)
+                }
+            },
+            Err(why) => {
+                note_unproven(&facts, &why);
+                (facts, standing)
+            }
+        }
+    }
+}
+
+/// Says in the journal why a listed program was not shown to be its unit.
+fn note_unproven(facts: &Facts, why: &dyn std::fmt::Display) {
+    journal::note(
+        "unproven",
+        &[
+            kv("pid", &facts.pid),
+            kv("uid", &facts.uid),
+            kv("cgroup", &facts.cgroup.as_str()),
+            kv("why", &why),
+        ],
+    );
+}
+
 /// What a standing means to the service: a listed program with a role and a proof, or nothing.
 fn credential(standing: &Standing) -> Credential {
     match standing {
@@ -67,7 +114,7 @@ fn credential(standing: &Standing) -> Credential {
             role: role.clone(),
             strength: match proof {
                 Proof::Exe => Strength::Image,
-                Proof::Full => Strength::Manager,
+                Proof::Full => Strength::Unit,
                 _ => Strength::Cgroup,
             },
         },

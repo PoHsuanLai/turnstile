@@ -58,14 +58,29 @@ socket unit (systemd) --accept--> Daemon --thread--> serve(conn)
 
 | Kind | Role in the table | Proof | User | Control group |
 |---|---|---|---|---|
-| palmrest touchpad, wheel, keys | `pad_daemon` | the image, a root-owned file in the table | the seat's active user | `.../user@<uid>.service/.../palmrest.service` |
-| keycap keyboard, pointer | `keymap_daemon` | the image | not the seat's active user (a dynamic user); allowed before anyone is logged in | exactly `/system.slice/keycap.service` |
+| palmrest touchpad, wheel, keys | `pad_daemon` | the unit (`Full`) | the seat's active user | `.../user@<uid>.service/.../palmrest.service` |
+| keycap keyboard, pointer | `keymap_daemon` | the unit (`Full`) | not the seat's active user (a dynamic user); allowed before anyone is logged in | exactly `/system.slice/keycap.service` |
 
-The cgroup of a system service cannot be forged by a user, so for keycap it is as strong as a root
-daemon can get without asking a manager. For palmrest the residual gap is a process of the same user
-that runs a copy of the genuine image with `LD_PRELOAD` from inside `palmrest.service`'s group; it gets
-a touchpad, a wheel and keys that cannot type text, nothing else. The service does not ask the user's
-manager: that would mean connecting to a socket the user controls from a root process.
+A caller is admitted only at peephole's `Full` proof (NEW-PI-4); the control group, or the group and
+the image, are refused and logged (`unproven` with the reason, then `refused ... its unit was not
+checked`). The service has no unit manager to ask (it would be a socket the user controls, and it
+links no bus), so `identity/unit_files` builds the unit's facts from what a root service can read
+with its one capability:
+
+- the unit's fragment is in a root-owned unit folder and every drop-in is root-owned; the unit is not
+  a run-time unit of the system manager;
+- `UnsetEnvironment=` (fragment and drop-ins folded in order, an empty assignment resets) holds all 22
+  loader variables, and the process's own `/proc/<pid>/environ` holds none of them;
+- nothing traces the process (`TracerPid` is 0);
+- the unit's `ExecStart=` program is one of the table row's.
+
+What this does not show is the manager's `MainPID`. For keycap the group can only be filled by the
+system manager, so it holds. For palmrest the user can fill a group of that name, and a copy of the
+genuine image started by hand with a clean environment, then traced after it has connected, still
+passes; it gets a touchpad, a wheel and keys that cannot type text, and casement classes the devices
+as virtual (NEW-PI-4, casement's half). The user's own unit folders are not read (the service cannot
+open a home folder); their effect shows in the process checks. Closing this fully needs the user
+manager's word (a different broker design) and is recorded in FINDINGS.
 
 ## The ceilings (`turnstile-wire/src/ceiling/`)
 

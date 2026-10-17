@@ -31,14 +31,14 @@ pub(crate) fn palmrest_cgroup(uid: u32) -> String {
 
 /// The genuine palmrest of `uid`.
 pub(crate) fn palmrest(uid: u32) -> Caller {
-    listed("pad_daemon", Strength::Image, uid, &palmrest_cgroup(uid))
+    listed("pad_daemon", Strength::Unit, uid, &palmrest_cgroup(uid))
 }
 
 /// The genuine keycap.
 pub(crate) fn keycap() -> Caller {
     listed(
         "keymap_daemon",
-        Strength::Image,
+        Strength::Unit,
         KEYCAP_UID,
         "/system.slice/keycap.service",
     )

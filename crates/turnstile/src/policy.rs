@@ -3,12 +3,14 @@
 //!
 //! | Kind | Role in the table | Strength | User | Control group |
 //! |---|---|---|---|---|
-//! | palmrest's | `pad_daemon` | image | the seat's active user | a user unit `palmrest.service` of that user's manager |
-//! | keycap's | `keymap_daemon` | image | not the seat's active user (it is a dynamic user) | exactly `/system.slice/keycap.service` |
+//! | palmrest's | `pad_daemon` | unit | the seat's active user | a user unit `palmrest.service` of that user's manager |
+//! | keycap's | `keymap_daemon` | unit | not the seat's active user (it is a dynamic user) | exactly `/system.slice/keycap.service` |
 //!
-//! A user cannot put a process into `system.slice`, so for keycap the control group is as strong as a
-//! root service can get without asking a manager the user controls. For palmrest the image is
-//! checked by reading its `/proc/<pid>/exe`, which needs the one capability the unit keeps.
+//! "Unit" is peephole's `Full`: a root-owned image in the table, a unit with a root-owned fragment
+//! and drop-ins that unsets every loader variable, and a process whose own environment holds none
+//! of them. A control group name or an image alone is refused (`TooWeak`) and logged: a process of
+//! the same user can make the first and run the second under a preloaded library. The checks that
+//! need another user's `/proc/<pid>` use the one capability the unit keeps.
 
 use crate::identity::{ActiveUid, Caller, Credential, SeatSource, Strength};
 use peephole_core::roles::{KEYMAP_DAEMON, PAD_DAEMON};
@@ -32,8 +34,8 @@ pub enum Refusal {
         /// The role the table gave.
         have: String,
     },
-    /// Proven by its control group only, or not enough.
-    #[error("its image was not checked")]
+    /// Proven by its control group or its image only: its unit was not shown to be the real one.
+    #[error("its unit was not checked")]
     TooWeak,
     /// Nobody is logged in, so there is no user whose program this could be.
     #[error("no one is logged in")]
@@ -97,7 +99,7 @@ pub fn authorise(kind: Kind, caller: &Caller, seat: ActiveUid) -> Result<(), Ref
                 have: have.to_string(),
             });
         }
-        Credential::Listed { strength, .. } if *strength < Strength::Image => {
+        Credential::Listed { strength, .. } if *strength < Strength::Unit => {
             return Err(Refusal::TooWeak);
         }
         Credential::Listed { .. } => {}

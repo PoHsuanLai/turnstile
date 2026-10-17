@@ -72,7 +72,7 @@ fn refusals_table() {
         (
             "another role: the shell",
             Kind::PalmrestWheel,
-            listed("shell", Strength::Image, USER, &palmrest_cgroup(USER)),
+            listed("shell", Strength::Unit, USER, &palmrest_cgroup(USER)),
             seat(Some(USER)),
             WrongRole {
                 have: "shell".to_owned(),
@@ -125,14 +125,14 @@ fn refusals_table() {
         (
             "palmrest in another user's manager",
             Kind::PalmrestWheel,
-            listed("pad_daemon", Strength::Image, USER, &other_user_cgroup),
+            listed("pad_daemon", Strength::Unit, USER, &other_user_cgroup),
             seat(Some(USER)),
             WrongPlace,
         ),
         (
             "palmrest as a system service",
             Kind::PalmrestWheel,
-            listed("pad_daemon", Strength::Image, USER, system_palmrest),
+            listed("pad_daemon", Strength::Unit, USER, system_palmrest),
             seat(Some(USER)),
             WrongPlace,
         ),
@@ -141,7 +141,7 @@ fn refusals_table() {
             Kind::KeycapKeyboard,
             listed(
                 "keymap_daemon",
-                Strength::Image,
+                Strength::Unit,
                 USER,
                 "/system.slice/keycap.service",
             ),
@@ -151,7 +151,7 @@ fn refusals_table() {
         (
             "keycap as a user unit of the person",
             Kind::KeycapKeyboard,
-            listed("keymap_daemon", Strength::Image, KEYCAP_UID, user_keycap),
+            listed("keymap_daemon", Strength::Unit, KEYCAP_UID, user_keycap),
             seat(Some(USER)),
             WrongPlace,
         ),
@@ -160,7 +160,7 @@ fn refusals_table() {
             Kind::KeycapPointer,
             listed(
                 "keymap_daemon",
-                Strength::Image,
+                Strength::Unit,
                 KEYCAP_UID,
                 "/system.slice/keycap.service/x",
             ),
@@ -173,18 +173,47 @@ fn refusals_table() {
     }
 }
 
+/// NEW-PI-4: every strength below the unit's own is refused for every kind, in the right place and
+/// as the right user; only the unit's proof is enough.
 #[test]
-fn a_manager_level_proof_is_enough() {
-    let caller = listed(
-        "pad_daemon",
-        Strength::Manager,
-        USER,
-        &palmrest_cgroup(USER),
-    );
-    assert_eq!(
-        authorise(Kind::PalmrestKeys, &caller, seat(Some(USER))),
-        Ok(())
-    );
+fn only_a_proven_unit_gets_devices_whatever_the_place_is() {
+    let palmrest_at = palmrest_cgroup(USER);
+    let table: &[(&str, Strength, Result<(), Refusal>)] = &[
+        (
+            "its control group only",
+            Strength::Cgroup,
+            Err(Refusal::TooWeak),
+        ),
+        (
+            "its control group and its image",
+            Strength::Image,
+            Err(Refusal::TooWeak),
+        ),
+        ("its unit", Strength::Unit, Ok(())),
+    ];
+    for (name, strength, want) in table {
+        let pad = listed("pad_daemon", *strength, USER, &palmrest_at);
+        let key = listed(
+            "keymap_daemon",
+            *strength,
+            KEYCAP_UID,
+            "/system.slice/keycap.service",
+        );
+        for kind in PALMREST_KINDS {
+            assert_eq!(
+                authorise(kind, &pad, seat(Some(USER))),
+                *want,
+                "palmrest, {name}, {kind:?}"
+            );
+        }
+        for kind in KEYCAP_KINDS {
+            assert_eq!(
+                authorise(kind, &key, seat(Some(USER))),
+                *want,
+                "keycap, {name}, {kind:?}"
+            );
+        }
+    }
 }
 
 #[test]
