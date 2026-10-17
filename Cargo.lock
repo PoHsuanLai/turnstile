@@ -173,8 +173,8 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "peephole"
-version = "0.1.0"
-source = "git+https://github.com/PoHsuanLai/peephole?tag=v0.1.0#9cef5600da6cc873cf2328e60c0a2aeec5d9f48b"
+version = "0.1.4"
+source = "git+https://github.com/PoHsuanLai/peephole?tag=v0.1.4#5a2e742fb12cd78b4555ff07d8d96681fa0bbeb8"
 dependencies = [
  "peephole-core",
  "rustix",
@@ -183,8 +183,8 @@ dependencies = [
 
 [[package]]
 name = "peephole-core"
-version = "0.1.0"
-source = "git+https://github.com/PoHsuanLai/peephole?tag=v0.1.0#9cef5600da6cc873cf2328e60c0a2aeec5d9f48b"
+version = "0.1.4"
+source = "git+https://github.com/PoHsuanLai/peephole?tag=v0.1.4#5a2e742fb12cd78b4555ff07d8d96681fa0bbeb8"
 dependencies = [
  "serde",
  "thiserror",
