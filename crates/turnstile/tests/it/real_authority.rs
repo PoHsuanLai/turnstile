@@ -31,7 +31,6 @@ role = "keymap_daemon"
 "#;
 const KEYCAP_CGROUP: &str = "0::/system.slice/keycap.service\n";
 const KEYCAP_UNIT_FILE: &str = "/usr/lib/systemd/system/keycap.service";
-const CLEAN_ENVIRON: &str = "PATH=/usr/bin\0LANG=C\0";
 
 /// The unit's `UnsetEnvironment=` value: every loader variable.
 fn unset() -> String {
@@ -45,15 +44,10 @@ fn keycap_unit() -> String {
     )
 }
 
-/// The files of this test's own process: its environment and who traces it.
-fn proc_files(tree: FixtureProc, environ: &str, tracer: u32) -> FixtureProc {
+/// The files of this test's own process: who traces it.
+fn proc_files(tree: FixtureProc, tracer: u32) -> FixtureProc {
     let base = format!("/proc/{}", me());
     tree.file(
-        &format!("{base}/environ"),
-        environ.as_bytes(),
-        FileTrust::RootOnly,
-    )
-    .file(
         &format!("{base}/status"),
         format!("Name:\tx\nTracerPid:\t{tracer}\n"),
         FileTrust::RootOnly,
@@ -64,7 +58,6 @@ fn proc_files(tree: FixtureProc, environ: &str, tracer: u32) -> FixtureProc {
 fn keycap_world() -> FixtureProc {
     proc_files(
         tree().file(KEYCAP_UNIT_FILE, keycap_unit(), FileTrust::RootOnly),
-        CLEAN_ENVIRON,
         0,
     )
 }
@@ -151,7 +144,7 @@ fn a_listed_image_is_unit_strength_only_when_the_unit_and_the_process_both_check
         ),
         (
             "no unit file at all",
-            proc_files(tree(), CLEAN_ENVIRON, 0),
+            proc_files(tree(), 0),
             Strength::Image,
         ),
         (
@@ -198,22 +191,13 @@ fn a_listed_image_is_unit_strength_only_when_the_unit_and_the_process_both_check
             Strength::Image,
         ),
         (
-            "a loader variable in the process's environment",
-            proc_files(keycap_world(), "PATH=/usr/bin\0LD_PRELOAD=/tmp/x.so\0", 0),
-            Strength::Image,
-        ),
-        (
             "a process that is being traced",
-            proc_files(keycap_world(), CLEAN_ENVIRON, 4242),
+            proc_files(keycap_world(), 4242),
             Strength::Image,
         ),
         (
-            "an environment that cannot be read",
-            tree().file(KEYCAP_UNIT_FILE, keycap_unit(), root).file(
-                &format!("/proc/{}/status", me()),
-                "TracerPid:\t0\n",
-                root,
-            ),
+            "a status that cannot be read",
+            tree().file(KEYCAP_UNIT_FILE, keycap_unit(), root),
             Strength::Image,
         ),
     ];
@@ -230,8 +214,8 @@ fn a_listed_image_is_unit_strength_only_when_the_unit_and_the_process_both_check
     }
 }
 
-/// NEW-PI-4: a process that passes as palmrest by control group and genuine image, run with a loader
-/// variable, is refused; the real system unit is served.
+/// NEW-PI-4: a process that passes as palmrest by control group and genuine image, with no unit
+/// behind it, is refused; the real system unit is served.
 #[test]
 fn palmrest_is_served_only_as_its_proven_system_unit() {
     let cgroup = "0::/system.slice/palmrest.service\n";
@@ -247,20 +231,14 @@ fn palmrest_is_served_only_as_its_proven_system_unit() {
                 unit.clone(),
                 FileTrust::RootOnly,
             ),
-            CLEAN_ENVIRON,
             0,
         )
     };
     let table: Vec<(&str, FixtureProc, Result<(), Refusal>)> = vec![
         ("the real unit", with_unit(), Ok(())),
         (
-            "genuine image, forged group, preloaded",
-            proc_files(with_unit(), "LD_PRELOAD=/home/u/x.so\0", 0),
-            Err(Refusal::TooWeak),
-        ),
-        (
             "genuine image, forged group, no unit file",
-            proc_files(tree(), CLEAN_ENVIRON, 0),
+            proc_files(tree(), 0),
             Err(Refusal::TooWeak),
         ),
     ];

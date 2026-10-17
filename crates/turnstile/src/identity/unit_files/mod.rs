@@ -7,8 +7,8 @@
 //!
 //! - the unit's fragment is a file in a root-owned unit folder, with every drop-in root-owned, and
 //!   the unit is not transient;
-//! - the unit's `UnsetEnvironment=` holds all the loader variables, and the process's own
-//!   environment holds none of them;
+//! - the unit's `UnsetEnvironment=` holds all the loader variables (the process's own environment
+//!   is not read: see `process`);
 //! - nothing is tracing the process;
 //! - the unit's `ExecStart=` program is the row's.
 //!
@@ -18,7 +18,8 @@
 //!
 //! The folders read are the root-owned ones only. A user's own unit folders sit under a home the
 //! service cannot read (it holds `CAP_SYS_PTRACE` and no file-reading capability), so a user's
-//! override of the unit is not seen; the process checks above are what covers its effect.
+//! override of the unit is not seen. The policy serves only system units, which a person cannot
+//! override.
 
 mod directives;
 mod process;

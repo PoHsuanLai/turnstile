@@ -2,7 +2,7 @@
 //! them against the table. This is the one file that knows `peephole`'s types; everything else
 //! sees a [`Caller`].
 //!
-//! The service holds `CAP_SYS_PTRACE` so that the probe can read `/proc/<pid>/exe` and `environ` of
+//! The service holds `CAP_SYS_PTRACE` so that the probe can read `/proc/<pid>/exe` and `status` of
 //! another user's process. It never asks a unit manager (that would mean connecting to a socket the
 //! user controls from a root process), so the unit's facts come from the unit files and the
 //! process itself ([`super::unit_files`]). A listed program whose image checks out but whose unit

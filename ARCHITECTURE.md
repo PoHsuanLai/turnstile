@@ -76,7 +76,9 @@ with its one capability:
 - the unit's fragment is in a root-owned unit folder and every drop-in is root-owned; the unit is not
   a run-time unit of the system manager;
 - `UnsetEnvironment=` (fragment and drop-ins folded in order, an empty assignment resets) holds all 22
-  loader variables, and the process's own `/proc/<pid>/environ` holds none of them;
+  loader variables. The process's own `/proc/<pid>/environ` is not read: it is closed to root with
+  only `CAP_SYS_PTRACE` when the process runs as another user, and only root can set a system
+  unit's environment (NEW-FA-1);
 - nothing traces the process (`TracerPid` is 0);
 - the unit's `ExecStart=` program is one of the table row's.
 

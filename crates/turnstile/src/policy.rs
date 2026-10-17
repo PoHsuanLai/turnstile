@@ -10,8 +10,7 @@
 //! served before anyone is logged in.
 //!
 //! "Unit" is peephole's `Full`: a root-owned image in the table, a unit with a root-owned fragment
-//! and drop-ins that unsets every loader variable, and a process whose own environment holds none
-//! of them. A control group name or an image alone is refused (`TooWeak`) and logged: a process of
+//! and drop-ins that unsets every loader variable, and a process nothing traces. A control group name or an image alone is refused (`TooWeak`) and logged: a process of
 //! the same user can make the first and run the second under a preloaded library. The checks that
 //! need another user's `/proc/<pid>` use the one capability the unit keeps.
 
