@@ -102,6 +102,13 @@ admitted at all: the policy asks for a group under `/system.slice`.
 | `KeycapKeyboard` | handed | codes 1 to 0x2ff, the six pointer axes of a combo device, the three lights; name `keycap keyboard`, vendor `0x4b43` |
 | `KeycapPointer` | handed | the request cut to buttons, relative axes, absolute axes with sane ranges and pointer properties; never a key |
 
+Every device, whatever its kind, is made with a label naming the service it is for: `phys`
+(`UI_SET_PHYS`, set before `UI_DEV_SETUP`) is `turnstile/pad_daemon` for palmrest's kinds and
+`turnstile/keymap_daemon` for keycap's (`turnstile_wire::Maker`; the role is the peephole role the
+policy admitted). The kernel shows it in `/sys/class/input/<event>/device/phys`. Only a process that
+can open `/dev/uinput` can set it, and that is this service alone, so the desktop's compositor
+reads it as proof of who the device was made for (FINDINGS 13). No client sends any part of it.
+
 Rate limit per proxied device: 120 `Events` datagrams per second (burst 30). Above it datagrams are
 dropped and counted; three seconds of sustained excess close the connection. Events refused by a
 ceiling are counted; 256 over a connection's life close it.

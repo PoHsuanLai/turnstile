@@ -7,6 +7,7 @@ use crate::codes::{
 };
 use crate::event::Event;
 use crate::limits::MAX_WHEEL_MAGNITUDE;
+use crate::maker::Maker;
 use crate::spec::DeviceSpec;
 
 /// The relative axes the wheel has.
@@ -16,6 +17,7 @@ pub(super) fn plan() -> Plan {
     Plan {
         spec: DeviceSpec {
             name: "palmrest wheel".to_owned(),
+            maker: Maker::PadDaemon,
             vendor: 0x0001,
             product: 0x0001,
             keys: Vec::new(),

@@ -18,6 +18,17 @@ fn registered(name: &str) -> bool {
         .any(|n| n.trim() == name)
 }
 
+/// The `phys` label of the registered input device called `name`.
+fn phys_of(name: &str) -> Option<String> {
+    std::fs::read_dir("/sys/class/input")
+        .ok()?
+        .flatten()
+        .find(|e| {
+            std::fs::read_to_string(e.path().join("device/name")).is_ok_and(|n| n.trim() == name)
+        })
+        .and_then(|e| std::fs::read_to_string(e.path().join("device/phys")).ok())
+}
+
 fn wait_for(name: &str, present: bool) -> bool {
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline {
@@ -37,6 +48,11 @@ fn a_real_touchpad_appears_takes_a_frame_and_disappears() {
     assert!(
         wait_for("palmrest touchpad", true),
         "the device did not appear"
+    );
+    assert_eq!(
+        phys_of("palmrest touchpad").as_deref().map(str::trim),
+        Some("turnstile/pad_daemon"),
+        "the kernel shows whom it is for"
     );
     device
         .write(&[Event::new(EV_ABS, ABS_MT_SLOT, 0), Event::SYNC])

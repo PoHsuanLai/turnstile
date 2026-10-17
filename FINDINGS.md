@@ -89,6 +89,21 @@ Departures from the plan, standing facts and open items. An entry names the cond
     already proven as palmrest or keycap has its own (needs the policy's uid, a config the service
     does not have).
 
+13. **Every device carries the label of the service it was made for (owner, 2026-10-17, NEW-FA-4).**
+    casement used to guess whether input is the person's own hand from a device's bus type and
+    vendor id, which wrongly caught a laptop's keyboard and kept palmrest's Magic Mouse clicks off
+    the lock screen and consent sheets. turnstile is the only process that can create a uinput
+    device (`dist/72-turnstile.rules`) and it already proves which service each device is for
+    (`policy.rs`), so it writes that into the device with `UI_SET_PHYS` (`input-linux`'s
+    `UInputHandle::set_phys`, before `UI_DEV_SETUP`): `turnstile/pad_daemon` for palmrest's three kinds,
+    `turnstile/keymap_daemon` for keycap's two. The kernel shows it in
+    `/sys/class/input/<event>/device/phys`. The format is `turnstile_wire::Maker` (format and
+    `parse`); every plan sets `DeviceSpec::maker` and a test pins the exact strings and the label of
+    each kind. casement links nothing of turnstile, so it keeps its own copy of the parser and pins the
+    same strings in its `origin.rs` test: change a string here and change it there. The label is
+    not a secret and not signed: it is trusted because only root can create the device. A device made
+    some other way (a `uinput` group member on a standalone install, ydotool) has none.
+
 ## Unverified (nothing here was compiled or run; the gate checks each)
 
 0. NEW-PI-4: `peephole` is now tag `v0.1.4` (Cargo.lock to be refreshed). The calls added are `UnitFacts`
@@ -120,6 +135,10 @@ Departures from the plan, standing facts and open items. An entry names the cond
 7. NEW-FA-3: `rustix::net::sockopt::socket_peercred(&OwnedFd)` returns `UCred` with `uid.as_raw()`
    (read in rustix 1.1.5, not compiled); the connection thread's stack is 1 MiB, not 256 KiB, because
    identification now runs on it (not measured); the tests use a `let` chain in an `if` (edition 2024).
+8. NEW-FA-4: `input-linux` 0.7.1's `UInputHandle::set_phys(&CStr)` (read, not compiled) and that the kernel keeps
+   a phys set before `UI_DEV_SETUP` through `UI_DEV_CREATE` (`uinput_ioctl_handler`, `UI_SET_PHYS`
+   only refuses once the device is created); the sysfs file `device/phys` shows it with a newline. The
+   manual device test (`device.rs`) checks the real label.
 
 ## Deferred
 

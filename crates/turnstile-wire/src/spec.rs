@@ -3,6 +3,7 @@
 //! a client's name, ids or axis ranges never reach the kernel except through a pointer's label.
 
 use crate::codes::{EV_ABS, EV_KEY, EV_LED, EV_REL};
+use crate::maker::Maker;
 
 /// One absolute axis with its range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +46,8 @@ impl AbsAxis {
 pub struct DeviceSpec {
     /// The name the desktop sees.
     pub name: String,
+    /// The service it is made for, written into the device as its label.
+    pub maker: Maker,
     /// Vendor id.
     pub vendor: u16,
     /// Product id.

@@ -12,6 +12,7 @@ use crate::codes::{
     REL_WHEEL, REL_WHEEL_HI_RES, REL_X, REL_Y,
 };
 use crate::limits::MAX_LABEL_BYTES;
+use crate::maker::Maker;
 use crate::message::PointerCaps;
 use crate::spec::{AbsAxis, DeviceSpec};
 
@@ -35,6 +36,7 @@ pub(super) fn keyboard() -> Plan {
     Plan {
         spec: DeviceSpec {
             name: KEYBOARD_NAME.to_owned(),
+            maker: Maker::KeymapDaemon,
             vendor: VENDOR,
             product: 0x0001,
             keys: (1..=KEY_MAX).collect(),
@@ -65,6 +67,7 @@ pub(super) fn pointer(caps: &PointerCaps) -> Result<Plan, BadCaps> {
     Ok(Plan {
         spec: DeviceSpec {
             name: pointer_name(&caps.label),
+            maker: Maker::KeymapDaemon,
             vendor: caps.vendor,
             product: caps.product,
             keys: buttons,

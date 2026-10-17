@@ -10,6 +10,7 @@ use crate::codes::{EV_KEY, EV_SYN, KEY_LEFTALT, KEY_LEFTCTRL, KEY_LEFTMETA, SYN_
 use crate::event::Event;
 use crate::keytable::{KeyClass, class_of};
 use crate::limits::{MAX_KEY_CODES, MAX_KEYS_DOWN};
+use crate::maker::Maker;
 use crate::spec::DeviceSpec;
 
 /// The modifiers that turn a key press into a shortcut. Shift alone does not.
@@ -31,6 +32,7 @@ pub(super) fn plan(requested: &[u16]) -> Result<Plan, BadCaps> {
     Ok(Plan {
         spec: DeviceSpec {
             name: "palmrest keys".to_owned(),
+            maker: Maker::PadDaemon,
             vendor: 0x0001,
             product: 0x0003,
             keys: keys.clone(),

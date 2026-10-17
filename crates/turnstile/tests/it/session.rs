@@ -1,3 +1,4 @@
+use peephole_core::roles::{KEYMAP_DAEMON, PAD_DAEMON};
 use turnstile::backend::fake::{FakeBackend, Fate};
 use turnstile::policy::AllowKinds;
 use turnstile::session::{Outgoing, Phase, Session, Step};
@@ -7,7 +8,7 @@ use turnstile_wire::limits::{
     MAX_DEVICES_PER_CONNECTION, MAX_HANDED_PER_CONNECTION,
 };
 use turnstile_wire::{
-    Create, Delivery, DeviceId, Event, Kind, Millis, PointerCaps, Reason, Reply, Request,
+    Create, Delivery, DeviceId, Event, Kind, Maker, Millis, PointerCaps, Reason, Reply, Request,
 };
 
 fn all() -> AllowKinds {
@@ -279,4 +280,33 @@ fn devices_of_one_connection_are_independent() {
     assert!(backend.log().writes.is_empty());
     s.handle(T0, events(1, vec![wheel(1)]));
     assert_eq!(backend.log().writes, [(1, vec![wheel(1)])]);
+}
+
+/// NEW-FA-4: the kernel is told, for every kind, the service the device is made for; the label's
+/// role is the peephole role the policy admitted the caller under.
+#[test]
+fn every_device_kind_is_made_with_the_label_of_the_caller_it_is_for() {
+    let pointer = PointerCaps {
+        buttons: vec![BTN_LEFT],
+        rels: vec![REL_X],
+        ..PointerCaps::default()
+    };
+    let want = [
+        (Create::touchpad(), PAD_DAEMON),
+        (Create::wheel(), PAD_DAEMON),
+        (Create::keys(vec![30, 29]), PAD_DAEMON),
+        (Create::keyboard(), KEYMAP_DAEMON),
+        (Create::pointer(pointer), KEYMAP_DAEMON),
+    ];
+    for (create, role) in want {
+        let backend = FakeBackend::new();
+        let admission = all();
+        let mut s = Session::new(&backend, &admission);
+        let kind = create.kind;
+        let made = s.handle(T0, Request::Create(create));
+        assert!(created(&made).is_some(), "{kind:?}");
+        let label = backend.log().specs[0].maker.to_string();
+        assert_eq!(label, format!("turnstile/{}", role.as_str()), "{kind:?}");
+        assert_eq!(Maker::parse(&label), Some(Maker::of(kind)), "{kind:?}");
+    }
 }

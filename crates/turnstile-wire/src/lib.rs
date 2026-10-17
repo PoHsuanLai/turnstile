@@ -16,6 +16,7 @@ pub mod keytable;
 pub mod kind;
 pub mod limiter;
 pub mod limits;
+pub mod maker;
 pub mod message;
 pub mod spec;
 
@@ -24,5 +25,6 @@ pub use codec::{WireError, decode_reply, decode_request, encode_reply, encode_re
 pub use event::Event;
 pub use kind::{Delivery, Kind, Owner};
 pub use limiter::{Admit, Limiter, Millis};
+pub use maker::Maker;
 pub use message::{Create, Detail, DeviceId, PointerCaps, Reason, Reply, Request};
 pub use spec::{AbsAxis, DeviceSpec};

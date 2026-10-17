@@ -6,6 +6,7 @@ use input_linux::{
     Key, LedKind, RangeError, RelativeAxis, UInputHandle, sys,
 };
 use rustix::fs::{Mode, OFlags};
+use std::ffi::CString;
 use std::io;
 use std::os::fd::OwnedFd;
 use std::path::PathBuf;
@@ -138,6 +139,10 @@ fn register(handle: &UInputHandle<OwnedFd>, spec: &DeviceSpec) -> io::Result<()>
     for &code in &spec.leds {
         handle.set_ledbit(LedKind::from_code(code).map_err(range)?)?;
     }
+    // The label only a process that can open the node can set: whom the device is made for.
+    let label = CString::new(spec.maker.to_string())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "a label with a NUL byte"))?;
+    handle.set_phys(&label)?;
     let id = InputId {
         bustype: BUS_VIRTUAL,
         vendor: spec.vendor,

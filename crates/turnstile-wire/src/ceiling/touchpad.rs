@@ -8,6 +8,7 @@ use crate::codes::{
     EV_KEY, EV_SYN, INPUT_PROP_POINTER, SYN_REPORT,
 };
 use crate::event::Event;
+use crate::maker::Maker;
 use crate::spec::{AbsAxis, DeviceSpec};
 
 /// Horizontal extent in device units (palmrest's `PAD_X_MAX`).
@@ -37,6 +38,7 @@ pub(super) fn plan() -> Plan {
     Plan {
         spec: DeviceSpec {
             name: "palmrest touchpad".to_owned(),
+            maker: Maker::PadDaemon,
             vendor: 0x0001,
             product: 0x0002,
             keys: KEYS.to_vec(),

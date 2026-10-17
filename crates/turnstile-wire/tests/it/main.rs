@@ -6,6 +6,7 @@ mod ceiling_pad;
 mod codec;
 mod kinds;
 mod limiter;
+mod maker;
 mod palmrest_table;
 
 use turnstile_wire::Event;
