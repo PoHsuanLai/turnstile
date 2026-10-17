@@ -7,7 +7,7 @@ use rustix::net::{
 use std::collections::{HashMap, VecDeque};
 use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::path::Path;
-use std::sync::{Mutex, mpsc};
+use std::sync::{Condvar, Mutex, mpsc};
 use std::time::Duration;
 use turnstile::backend::fake::FakeBackend;
 use turnstile::clock::Monotonic;
@@ -41,6 +41,70 @@ const WIDE: Caps = Caps {
     per_user: 64,
     total: 64,
 };
+
+/// How long a connection waits, once it is next in line, before it is identified: long enough for
+/// the one before it to have taken its slot.
+const SETTLE: Duration = Duration::from_millis(10);
+
+#[derive(Default)]
+struct Turn {
+    /// Connections accepted so far; the next one is numbered with this.
+    accepted: u64,
+    /// The connection that may be identified now.
+    now: u64,
+    by_fd: HashMap<RawFd, u64>,
+}
+
+/// Identifies connections one at a time in the order they were accepted, as the single accept
+/// thread once did. Since identification moved to a thread per connection (NEW-FA-3), threads race
+/// for slots; the slot tests count slots in connection order ("the fifth is refused"), so they need
+/// the order back. Every accepted connection must reach `identify`, so it is not used where the
+/// daemon closes connections at accept (a pending cap) or where one identification hangs.
+struct InOrder<A> {
+    inner: A,
+    turn: Mutex<Turn>,
+    changed: Condvar,
+}
+
+impl<A: Authority> InOrder<A> {
+    fn new(inner: A) -> Self {
+        Self {
+            inner,
+            turn: Mutex::default(),
+            changed: Condvar::new(),
+        }
+    }
+}
+
+impl<A: Authority> Authority for InOrder<A> {
+    fn peer_uid(&self, conn: &OwnedFd) -> Result<u32, IdentifyError> {
+        let uid = self.inner.peer_uid(conn)?;
+        let mut turn = self.turn.lock().expect("lock");
+        let number = turn.accepted;
+        turn.accepted += 1;
+        turn.by_fd.insert(conn.as_raw_fd(), number);
+        Ok(uid)
+    }
+
+    fn identify(&self, conn: &OwnedFd) -> Result<Caller, IdentifyError> {
+        let number = {
+            let turn = self.turn.lock().expect("lock");
+            let number = turn.by_fd.get(&conn.as_raw_fd()).copied().unwrap_or(0);
+            let _turn = self
+                .changed
+                .wait_while(turn, |turn| turn.now != number)
+                .expect("lock");
+            number
+        };
+        if number > 0 {
+            std::thread::sleep(SETTLE);
+        }
+        let named = self.inner.identify(conn);
+        self.turn.lock().expect("lock").now = number + 1;
+        self.changed.notify_all();
+        named
+    }
+}
 
 /// Runs a daemon on a fresh socket; the receiver says when `run` returned.
 fn start(idle_ms: u64) -> (tempfile::TempDir, Broker, mpsc::Receiver<()>, FakeBackend) {
@@ -127,7 +191,7 @@ fn start_with<A: Authority>(
     idle_ms: u64,
     authority: A,
 ) -> (tempfile::TempDir, Broker, mpsc::Receiver<()>, FakeBackend) {
-    start_capped(idle_ms, authority, WIDE)
+    start_capped(idle_ms, InOrder::new(authority), WIDE)
 }
 
 fn start_capped<A: Authority>(
