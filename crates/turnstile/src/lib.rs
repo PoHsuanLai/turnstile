@@ -2,7 +2,8 @@
 //! others.
 //!
 //! systemd owns the socket and starts the service on the first connection; the service exits by
-//! itself after a minute with no one connected. Each connection is one thread. A caller is
+//! itself after a minute with no one connected. Each connection is one thread, which also identifies
+//! its peer, so a peer that stalls the identification stalls only itself. A caller is
 //! identified by the kernel (the process behind the socket, held by a pidfd), judged against the
 //! root-owned table of desktop programs, and then may ask for exactly the device kinds of its own
 //! program. palmrest's devices are proxied: every event passes the ceiling in `turnstile-wire`.
@@ -14,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 pub mod activation;
+pub mod admit;
 pub mod backend;
 pub mod clock;
 pub mod daemon;
@@ -21,6 +23,7 @@ pub mod identity;
 pub mod idle;
 pub mod journal;
 pub mod link;
+pub mod pending;
 pub mod policy;
 pub mod serve;
 pub mod session;

@@ -10,6 +10,7 @@ pub mod seat;
 pub mod unit_files;
 
 use peephole_core::RoleName;
+use rustix::net::sockopt::socket_peercred;
 use std::os::fd::OwnedFd;
 
 /// How well a caller was proven to be the listed program, weakest first.
@@ -82,8 +83,17 @@ pub enum IdentifyError {
 
 /// Names the process behind a connection.
 pub trait Authority: Send + Sync + 'static {
-    /// Identifies the peer of `conn`.
+    /// Identifies the peer of `conn`. It may take for ever: the peer controls what its own
+    /// `/proc` entries and image file wait on, so the daemon calls it on a thread of its own.
     fn identify(&self, conn: &OwnedFd) -> Result<Caller, IdentifyError>;
+
+    /// The user the kernel names for the peer of `conn`, from the socket alone: no `/proc` read, so
+    /// it cannot wait on the peer. The daemon counts a connection by this before it identifies it.
+    fn peer_uid(&self, conn: &OwnedFd) -> Result<u32, IdentifyError> {
+        socket_peercred(conn)
+            .map(|cred| cred.uid.as_raw())
+            .map_err(|e| IdentifyError::Pin(e.to_string()))
+    }
 }
 
 pub use seat::{ActiveUid, SeatSource};

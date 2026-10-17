@@ -4,8 +4,8 @@ use crate::support::{USER, listed, palmrest};
 use rustix::net::{
     AddressFamily, SocketAddrUnix, SocketFlags, SocketType, bind, listen, socket_with,
 };
-use std::collections::VecDeque;
-use std::os::fd::OwnedFd;
+use std::collections::{HashMap, VecDeque};
+use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::path::Path;
 use std::sync::{Mutex, mpsc};
 use std::time::Duration;
@@ -15,9 +15,12 @@ use turnstile::daemon::{Daemon, Settings};
 use turnstile::identity::fake::FixedAuthority;
 use turnstile::identity::seat::FixedSeat;
 use turnstile::identity::{ActiveUid, Authority, Caller, Credential, IdentifyError};
+use turnstile::pending::Caps;
 use turnstile::serve::Context;
 use turnstile_client::{Broker, ClientError, Create, DeviceSource, Made, Reason, Session};
-use turnstile_wire::limits::{MAX_CONNECTIONS_PER_USER, MAX_RESERVED_PER_CLIENT};
+use turnstile_wire::limits::{
+    MAX_CONNECTIONS_PER_USER, MAX_PENDING_PER_USER, MAX_RESERVED_PER_CLIENT,
+};
 
 fn listener(path: &Path) -> OwnedFd {
     let fd = socket_with(
@@ -32,21 +35,78 @@ fn listener(path: &Path) -> OwnedFd {
     fd
 }
 
+/// Room for any number of identifications at once: the slot tests are about slots, and a burst of
+/// connections in a test must not meet the pending caps (those have tests of their own).
+const WIDE: Caps = Caps {
+    per_user: 64,
+    total: 64,
+};
+
 /// Runs a daemon on a fresh socket; the receiver says when `run` returned.
 fn start(idle_ms: u64) -> (tempfile::TempDir, Broker, mpsc::Receiver<()>, FakeBackend) {
     start_with(idle_ms, FixedAuthority::naming(palmrest()))
 }
 
-/// Names the next peers in the order given, then `rest` for every one after.
+/// Names the next peers in the order they are accepted, then `rest` for every one after. The peer
+/// is chosen when the daemon asks for its user (on the accept loop, in order), so the answer does
+/// not depend on which connection's thread runs first. A peer of a `hung` user is never identified
+/// until the gate opens (the sender is dropped).
 struct Scripted {
     next: Mutex<VecDeque<Caller>>,
     rest: Caller,
+    by_fd: Mutex<HashMap<RawFd, Caller>>,
+    hung: Option<(u32, Mutex<mpsc::Receiver<()>>)>,
+}
+
+impl Scripted {
+    fn new(next: VecDeque<Caller>, rest: Caller) -> Self {
+        Self {
+            next: Mutex::new(next),
+            rest,
+            by_fd: Mutex::default(),
+            hung: None,
+        }
+    }
+
+    /// Identification of peers of `uid` blocks until the returned sender is dropped.
+    fn hanging(mut self, uid: u32) -> (Self, mpsc::Sender<()>) {
+        let (gate, wait) = mpsc::channel();
+        self.hung = Some((uid, Mutex::new(wait)));
+        (self, gate)
+    }
 }
 
 impl Authority for Scripted {
-    fn identify(&self, _conn: &OwnedFd) -> Result<Caller, IdentifyError> {
-        let mut next = self.next.lock().expect("lock");
-        Ok(next.pop_front().unwrap_or_else(|| self.rest.clone()))
+    fn peer_uid(&self, conn: &OwnedFd) -> Result<u32, IdentifyError> {
+        let caller = self
+            .next
+            .lock()
+            .expect("lock")
+            .pop_front()
+            .unwrap_or_else(|| self.rest.clone());
+        let uid = caller.uid;
+        self.by_fd
+            .lock()
+            .expect("lock")
+            .insert(conn.as_raw_fd(), caller);
+        Ok(uid)
+    }
+
+    fn identify(&self, conn: &OwnedFd) -> Result<Caller, IdentifyError> {
+        let caller = self
+            .by_fd
+            .lock()
+            .expect("lock")
+            .get(&conn.as_raw_fd())
+            .cloned()
+            .unwrap_or_else(|| self.rest.clone());
+        if let Some((uid, gate)) = &self.hung
+            && *uid == caller.uid
+        {
+            // Ends with an error when the sender drops: that is the gate opening.
+            let _ = gate.lock().expect("lock").recv();
+        }
+        Ok(caller)
     }
 }
 
@@ -67,6 +127,14 @@ fn start_with<A: Authority>(
     idle_ms: u64,
     authority: A,
 ) -> (tempfile::TempDir, Broker, mpsc::Receiver<()>, FakeBackend) {
+    start_capped(idle_ms, authority, WIDE)
+}
+
+fn start_capped<A: Authority>(
+    idle_ms: u64,
+    authority: A,
+    pending: Caps,
+) -> (tempfile::TempDir, Broker, mpsc::Receiver<()>, FakeBackend) {
     let dir = tempfile::tempdir().expect("scratch folder");
     let path = dir.path().join("input.sock");
     let kernel = FakeBackend::new();
@@ -79,6 +147,7 @@ fn start_with<A: Authority>(
     let settings = Settings {
         idle: Duration::from_millis(idle_ms),
         slice: Duration::from_millis(20),
+        pending,
     };
     let daemon = Daemon::new(listener(&path), context, settings);
     let (done, finished) = mpsc::channel();
@@ -124,10 +193,7 @@ fn a_flood_from_one_user_is_refused_after_its_own_slots_and_palmrest_still_gets_
         .map(|_| stranger(2000))
         .chain([stranger(2001)])
         .collect();
-    let authority = Scripted {
-        next: Mutex::new(script),
-        rest: palmrest(),
-    };
+    let authority = Scripted::new(script, palmrest());
     let (_dir, broker, _finished, _kernel) = start_with(60_000, authority);
     let held: Vec<_> = (0..MAX_CONNECTIONS_PER_USER)
         .map(|_| broker.open().expect("connects"))
@@ -177,4 +243,58 @@ fn proven_clients_have_their_own_cap() {
         "{err:?}"
     );
     drop(held);
+}
+
+/// Runs `work` on a thread and fails if it takes more than five seconds: a stalled accept loop
+/// would otherwise hang the test for ever.
+fn promptly<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
+    let (done, result) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = done.send(work());
+    });
+    result
+        .recv_timeout(Duration::from_secs(5))
+        .expect("finished in time")
+}
+
+/// NEW-FA-3: a peer whose identification never returns holds its own thread and nobody else's.
+#[test]
+fn a_stuck_identification_does_not_delay_palmrest() {
+    let script = VecDeque::from([stranger(3000)]);
+    let (authority, release) = Scripted::new(script, palmrest()).hanging(3000);
+    let (_dir, broker, _finished, _kernel) = start_capped(60_000, authority, Caps::default());
+    let _stuck = broker.open().expect("connects");
+    let served = promptly(move || {
+        let mut pad = broker.open().expect("connects");
+        matches!(pad.create(&Create::wheel()), Ok(Made::Proxied(_)))
+    });
+    assert!(served, "palmrest waited behind a stuck identification");
+    drop(release);
+}
+
+/// NEW-FA-3: one user's stuck identifications use up that user's share and no one else's.
+#[test]
+fn a_user_over_its_pending_share_is_closed_at_once_and_palmrest_still_gets_in() {
+    let script: VecDeque<Caller> = (0..=MAX_PENDING_PER_USER).map(|_| stranger(3000)).collect();
+    let (authority, release) = Scripted::new(script, palmrest()).hanging(3000);
+    let (_dir, broker, _finished, _kernel) = start_capped(60_000, authority, Caps::default());
+    let _stuck: Vec<_> = (0..MAX_PENDING_PER_USER)
+        .map(|_| broker.open().expect("connects"))
+        .collect();
+    let (refused, served) = promptly(move || {
+        let mut extra = broker.open().expect("connects");
+        let refused = extra.create(&Create::wheel());
+        let mut pad = broker.open().expect("connects");
+        let served = pad.create(&Create::wheel());
+        (refused, served)
+    });
+    assert!(
+        matches!(
+            refused,
+            Err(ClientError::Refused(Reason::TooMany) | ClientError::Closed)
+        ),
+        "{refused:?}"
+    );
+    assert!(matches!(served, Ok(Made::Proxied(_))), "{served:?}");
+    drop(release);
 }

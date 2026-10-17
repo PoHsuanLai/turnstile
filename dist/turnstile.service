@@ -51,7 +51,8 @@ DevicePolicy=closed
 DeviceAllow=/dev/uinput rw
 
 # Up to twenty-four connections (16 strangers, 8 reserved) of a few small buffers each; a
-# descriptor per connection and up to four per proxied device.
+# descriptor per connection and up to four per proxied device. Up to six more connections wait to
+# be identified, each on a thread of its own with a few descriptors: 1 + 24 + 6 = 31 threads.
 MemoryMax=32M
 TasksMax=32
 LimitNOFILE=128

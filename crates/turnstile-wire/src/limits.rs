@@ -43,6 +43,23 @@ pub const MAX_CONNECTIONS_PER_USER: usize = 4;
 /// after a cut and may briefly hold the old and the new, so more than one; outside every other cap.
 pub const MAX_RESERVED_PER_CLIENT: usize = 4;
 
+/// Connections being identified at once from one user (NEW-FA-3): identification reads the peer's
+/// `/proc` entries and can wait on a program the peer controls, so each one has a thread of its own,
+/// and one account may hold two (a client that reconnects while it still has the old connection).
+pub const MAX_PENDING_PER_USER: usize = 2;
+/// Connections being identified at once in all: each is a thread beyond the 24 that can hold a slot,
+/// so this is what is left of the unit's thread limit after the accept loop and those 24.
+pub const MAX_PENDING_IDENTIFICATIONS: usize = 6;
+/// Threads the unit allows, `TasksMax=` in `dist/turnstile.service`: keep the two in step.
+pub const SERVICE_TASKS_MAX: usize = 32;
+
+// The accept loop, every slot (strangers and both reserves) and every pending identification each
+// have a thread; together they must fit the unit's limit.
+const _: () = assert!(
+    1 + MAX_CONNECTIONS + 2 * MAX_RESERVED_PER_CLIENT + MAX_PENDING_IDENTIFICATIONS
+        <= SERVICE_TASKS_MAX
+);
+
 /// `Events` datagrams per second per device: a touchpad frame at 120 Hz is one datagram.
 pub const EVENT_DATAGRAMS_PER_SECOND: u64 = 120;
 /// Datagrams that may arrive in a burst before the rate applies.

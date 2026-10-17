@@ -67,6 +67,28 @@ Departures from the plan, standing facts and open items. An entry names the cond
     A symlink as the unit's fragment reads as writable (a link's mode is 0777), so it is refused; our
     units are plain files.
 
+12. **Identification runs on the connection's thread, with a pending cap (NEW-FA-3, 2026-10-17).**
+    Naming a peer reads its `/proc` entries and stats its image, and a program running from a file
+    system it controls (FUSE) can make that wait for ever; on the single accept thread that stalled
+    every later accept, palmrest's and keycap's included. Now the accept loop reads only the peer's
+    user from `SO_PEERCRED` (no `/proc`), takes a ticket from `pending.rs` (2 per user, 6 in all,
+    `MAX_PENDING_PER_USER`, `MAX_PENDING_IDENTIFICATIONS`) and spawns the connection thread, which
+    identifies and then takes its slot (`admit.rs`), so NEW-PI-6 holds as before: strangers are
+    counted into their own pool and never into the reserve. A user over its share is closed at once.
+    Choice: a per-connection thread rather than a worker pool or a timeout, because a blocked `stat`
+    cannot be cancelled, so only a thread of its own keeps the stall off everyone else; the cap
+    bounds what stalled threads can cost. Budget: 1 loop + 16 strangers + 8 reserved + 6 pending = 31
+    threads under `TasksMax=32` (a compile-time check in the limits). Descriptors: a pending
+    connection holds its socket, a pidfd and a file or two at a time, about 24 more at the cap; the
+    128 still holds, since strangers make no devices (16 + 8 x 5 + 24 + a few = about 90; the
+    figure of 120 in decision 5 counted devices for strangers too).
+    Residual: stuck identifications are never reclaimed, so accounts that each run a hanging program
+    can use up their 2 each; with 3 such accounts the 6 are gone and no new connection (palmrest's
+    included) is served until those peers exit. A hung peer also keeps the service from exiting idle.
+    That takes several local accounts, not one. Closes if the pending room is split so that a user
+    already proven as palmrest or keycap has its own (needs the policy's uid, a config the service
+    does not have).
+
 ## Unverified (nothing here was compiled or run; the gate checks each)
 
 0. NEW-PI-4: `peephole` is now tag `v0.1.4` (Cargo.lock to be refreshed). The calls added are `UnitFacts`
@@ -95,6 +117,9 @@ Departures from the plan, standing facts and open items. An entry names the cond
    caller, which is the intended fail-closed behaviour.
 6. SELinux on Fedora lets an unconfined service domain open `/dev/uinput` and `/proc/<pid>/exe` of a
    user process.
+7. NEW-FA-3: `rustix::net::sockopt::socket_peercred(&OwnedFd)` returns `UCred` with `uid.as_raw()`
+   (read in rustix 1.1.5, not compiled); the connection thread's stack is 1 MiB, not 256 KiB, because
+   identification now runs on it (not measured); the tests use a `let` chain in an `if` (edition 2024).
 
 ## Deferred
 

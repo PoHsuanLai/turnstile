@@ -25,8 +25,9 @@ bus or an async runtime.
 ## One connection
 
 ```
-socket unit (systemd) --accept--> Daemon --thread--> serve(conn)
-                                                      |  Authority::identify   (pidfd, /proc, table)
+socket unit (systemd) --accept--> Daemon --thread--> admit(conn)
+        (SO_PEERCRED uid, Pending cap)                |  Authority::identify   (pidfd, /proc, table)
+                                                      |  Slots::take           (NEW-PI-6)
                                                       |  loop: recv datagram -> decode_request
                                                       |        Session::handle -> Backend / ceiling
                                                       |        send replies (a handed fd rides with Created)
@@ -36,7 +37,11 @@ socket unit (systemd) --accept--> Daemon --thread--> serve(conn)
 - The service is socket-activated and exits after 60 s with no connection and nothing to serve
   (`Idle`). Devices it handed over belong to their holder and survive the exit. One thread per
   connection, no async runtime.
-- The accept loop names the peer first and counts it after (`slots.rs`, NEW-PI-6). A caller that passes
+- The accept loop reads nothing of a peer but its user (`SO_PEERCRED`, no `/proc`). Identification
+  runs on the connection's own thread, because a peer can make it wait for ever (NEW-FA-3); at most 2
+  per user and 6 in all wait at once (`pending.rs`), and a connection over its user's share is closed
+  at once with `TooMany`. Those 6 plus the 24 slots plus the loop are 31 threads, under `TasksMax=32`.
+- A connection is identified first and counted into a slot after (`slots.rs`, NEW-PI-6). A caller that passes
   the policy for palmrest's or keycap's devices holds one of 4 slots reserved for that program, outside
   every other cap. Anyone else holds a slot of its user's pool (4) and of the shared total for strangers
   (16), so one account that opens connections in a loop fills its own slots and nobody else's.

@@ -5,6 +5,7 @@ mod daemon;
 mod device;
 mod identity;
 mod misc;
+mod pending;
 mod policy;
 mod real_authority;
 mod serve;
