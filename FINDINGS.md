@@ -19,10 +19,10 @@ Departures from the plan, standing facts and open items. An entry names the cond
    delete `/run/turnstile`, and with it the socket systemd keeps for activation. The socket unit makes
    the folder (`DirectoryMode=0755`) and nothing else needs one.
 4. **`MaxConnections=` is not in the socket unit.** It applies to `Accept=yes` sockets only. The
-   service caps its own live connections at 16 (`limits::MAX_CONNECTIONS`) and answers the rest with
-   `Refused(TooMany)`.
-5. **`LimitNOFILE=128`, not 64.** Sixteen connections plus up to four proxied devices on each is 80
-   descriptors in the worst case; 64 would make the cap unreachable.
+   service caps its own live connections and answers the rest with `Refused(TooMany)`: 16 for strangers
+   in all and 4 per user, plus a reserve of 4 for each of palmrest and keycap (NEW-PI-6, `slots.rs`).
+5. **`LimitNOFILE=128`, not 64.** Twenty-four connections (16 strangers, 8 reserved) plus up to four proxied devices on each is 120
+   descriptors in the worst case (strangers make none, so the real bound is far lower); 64 would make the cap unreachable.
 6. **`Feedback` is on the wire but the service sends none.** No proxied kind has an output
    capability (no lights, no repeat, no sound), so there is nothing to forward. keycap's lights
    travel on the descriptor it is handed. The message exists so a future kind with feedback needs no

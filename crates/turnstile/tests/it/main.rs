@@ -9,4 +9,5 @@ mod policy;
 mod real_authority;
 mod serve;
 mod session;
+mod slots;
 mod support;

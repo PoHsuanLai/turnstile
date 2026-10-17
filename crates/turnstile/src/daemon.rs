@@ -7,15 +7,14 @@ use crate::identity::{Authority, SeatSource};
 use crate::idle::{Idle, Idling};
 use crate::journal::{self, kv};
 use crate::link;
-use crate::serve::{Context, serve};
+use crate::serve::{Context, identify, serve_caller};
+use crate::slots::{Bucket, Slots};
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use rustix::io::Errno;
 use rustix::net::{SocketFlags, accept_with};
 use std::os::fd::OwnedFd;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
-use turnstile_wire::limits::MAX_CONNECTIONS;
 use turnstile_wire::{Reason, Reply};
 
 /// How long the service waits with no one connected before it exits: socket activation starts it
@@ -58,23 +57,6 @@ pub enum DaemonError {
     Accept(std::io::Error),
 }
 
-/// Counts live connections; the count drops when the token does, however the thread ends.
-#[derive(Debug)]
-struct Live(Arc<AtomicUsize>);
-
-impl Live {
-    fn enter(count: &Arc<AtomicUsize>) -> Self {
-        count.fetch_add(1, Ordering::SeqCst);
-        Self(Arc::clone(count))
-    }
-}
-
-impl Drop for Live {
-    fn drop(&mut self) {
-        self.0.fetch_sub(1, Ordering::SeqCst);
-    }
-}
-
 /// The service.
 #[derive(Debug)]
 pub struct Daemon<B, A, S, C> {
@@ -101,15 +83,15 @@ where
 
     /// Serves until idle for [`Settings::idle`], then returns.
     pub fn run(&self) -> Result<(), DaemonError> {
-        let live = Arc::new(AtomicUsize::new(0));
+        let slots = Slots::new();
         let limit_ms = u64::try_from(self.settings.idle.as_millis()).unwrap_or(u64::MAX);
         let mut idle = Idle::new(limit_ms);
         loop {
-            if idle.observe(self.context.clock.now(), live.load(Ordering::SeqCst)) == Idling::Exit {
+            if idle.observe(self.context.clock.now(), slots.open()) == Idling::Exit {
                 return Ok(());
             }
             if self.waiting_connection()? {
-                self.accept_one(&live)?;
+                self.accept_one(&slots)?;
             }
         }
     }
@@ -128,7 +110,9 @@ where
         }
     }
 
-    fn accept_one(&self, live: &Arc<AtomicUsize>) -> Result<(), DaemonError> {
+    /// Takes one waiting connection: names its peer first, then gives it a slot of its own pool, so
+    /// that a flood from one user can fill that user's slots and nobody else's (NEW-PI-6).
+    fn accept_one(&self, slots: &Slots) -> Result<(), DaemonError> {
         let conn = match accept_with(&self.listener, SocketFlags::CLOEXEC) {
             Ok(conn) => conn,
             Err(Errno::AGAIN | Errno::INTR | Errno::CONNABORTED) => return Ok(()),
@@ -139,19 +123,31 @@ where
             }
             Err(e) => return Err(DaemonError::Accept(e.into())),
         };
-        if live.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
-            journal::note("refused", &[kv("why", &"too many connections")]);
-            let _ = link::send_reply(&conn, &Reply::Refused(Reason::TooMany));
+        let Some(caller) = identify(&conn, &self.context.authority) else {
             return Ok(());
-        }
-        let token = Live::enter(live);
+        };
+        let bucket = Bucket::of(&caller, self.context.seat.active_uid());
+        let slot = match slots.take(bucket) {
+            Ok(slot) => slot,
+            Err(_) => {
+                journal::note(
+                    "refused",
+                    &[
+                        kv("caller", &caller.describe()),
+                        kv("why", &"too many connections"),
+                    ],
+                );
+                let _ = link::send_reply(&conn, &Reply::Refused(Reason::TooMany));
+                return Ok(());
+            }
+        };
         let context = Arc::clone(&self.context);
         let spawned = std::thread::Builder::new()
             .name("connection".to_owned())
             .stack_size(THREAD_STACK_BYTES)
             .spawn(move || {
-                let _token = token;
-                serve(conn, &context);
+                let slot = slot;
+                serve_caller(conn, caller, slot.bucket().handshake_ms(), &context);
             });
         if let Err(why) = spawned {
             journal::note("spawn", &[kv("why", &why)]);

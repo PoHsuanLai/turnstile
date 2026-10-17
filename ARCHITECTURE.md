@@ -35,9 +35,15 @@ socket unit (systemd) --accept--> Daemon --thread--> serve(conn)
 
 - The service is socket-activated and exits after 60 s with no connection and nothing to serve
   (`Idle`). Devices it handed over belong to their holder and survive the exit. One thread per
-  connection, at most 16, no async runtime.
-- A new connection that makes no device within a second is closed (`HANDSHAKE_TIMEOUT_MS`); one
-  that has a device may be silent for hours.
+  connection, no async runtime.
+- The accept loop names the peer first and counts it after (`slots.rs`, NEW-PI-6). A caller that passes
+  the policy for palmrest's or keycap's devices holds one of 4 slots reserved for that program, outside
+  every other cap. Anyone else holds a slot of its user's pool (4) and of the shared total for strangers
+  (16), so one account that opens connections in a loop fills its own slots and nobody else's.
+  A refused connection is answered `TooMany`.
+- A new connection that makes no device is closed: after a second for a proven palmrest or keycap
+  (`HANDSHAKE_TIMEOUT_MS`), after 200 ms for anyone else (`STRANGER_HANDSHAKE_TIMEOUT_MS`); one that
+  has a device may be silent for hours.
 - The first datagram byte is the protocol version; every list in a datagram is counted and capped
   before it is allocated; an oversize datagram (read with `MSG_TRUNC`) ends the connection.
 

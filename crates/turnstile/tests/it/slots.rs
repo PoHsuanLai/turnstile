@@ -1,0 +1,98 @@
+use crate::support::{KEYCAP_UID, USER, keycap, palmrest};
+use turnstile::identity::{ActiveUid, Caller, Credential};
+use turnstile::slots::{Bucket, Client, NoSlot, Slots};
+use turnstile_wire::limits::{MAX_CONNECTIONS, MAX_CONNECTIONS_PER_USER, MAX_RESERVED_PER_CLIENT};
+
+fn seat() -> ActiveUid {
+    ActiveUid(Some(USER))
+}
+
+fn stranger(uid: u32) -> Caller {
+    Caller {
+        credential: Credential::Unlisted,
+        ..palmrest(uid)
+    }
+}
+
+#[test]
+fn a_caller_that_passes_the_policy_has_a_reserve_and_anyone_else_a_user_pool() {
+    let table: &[(&str, Caller, Bucket)] = &[
+        (
+            "palmrest",
+            palmrest(USER),
+            Bucket::Reserved(Client::Palmrest),
+        ),
+        ("keycap", keycap(), Bucket::Reserved(Client::Keycap)),
+        (
+            "a stranger at the seat",
+            stranger(USER),
+            Bucket::Stranger(USER),
+        ),
+        (
+            "a stranger elsewhere",
+            stranger(2000),
+            Bucket::Stranger(2000),
+        ),
+        (
+            "palmrest of a user not at the seat",
+            palmrest(2000),
+            Bucket::Stranger(2000),
+        ),
+        (
+            "keycap's user is not a free pass",
+            Caller {
+                credential: Credential::Unlisted,
+                ..keycap()
+            },
+            Bucket::Stranger(KEYCAP_UID),
+        ),
+    ];
+    for (name, caller, want) in table {
+        assert_eq!(Bucket::of(caller, seat()), *want, "{name}");
+    }
+}
+
+#[test]
+fn one_user_cannot_take_another_users_slots_or_the_reserve() {
+    let slots = Slots::new();
+    let mine: Vec<_> = (0..MAX_CONNECTIONS_PER_USER)
+        .map(|_| slots.take(Bucket::Stranger(1)).expect("a slot"))
+        .collect();
+    assert_eq!(slots.take(Bucket::Stranger(1)).err(), Some(NoSlot));
+    let theirs = slots
+        .take(Bucket::Stranger(2))
+        .expect("another user's slot");
+    let pad = slots
+        .take(Bucket::Reserved(Client::Palmrest))
+        .expect("reserve");
+    assert_eq!(slots.open(), MAX_CONNECTIONS_PER_USER + 2);
+    drop(mine);
+    assert_eq!(slots.open(), 2);
+    assert!(
+        slots.take(Bucket::Stranger(1)).is_ok(),
+        "a dropped slot is free again"
+    );
+    drop((theirs, pad));
+}
+
+#[test]
+fn many_users_share_the_stranger_total_but_never_the_reserve() {
+    let slots = Slots::new();
+    let held: Vec<_> = (0..MAX_CONNECTIONS)
+        .map(|uid| {
+            slots
+                .take(Bucket::Stranger(u32::try_from(uid).expect("small")))
+                .expect("a slot")
+        })
+        .collect();
+    assert_eq!(slots.take(Bucket::Stranger(9999)).err(), Some(NoSlot));
+    for client in [Client::Palmrest, Client::Keycap] {
+        let reserve: Vec<_> = (0..MAX_RESERVED_PER_CLIENT)
+            .map(|_| slots.take(Bucket::Reserved(client)).expect("reserve"))
+            .collect();
+        assert_eq!(slots.take(Bucket::Reserved(client)).err(), Some(NoSlot));
+        drop(reserve);
+    }
+    drop(held);
+    assert_eq!(slots.open(), 0);
+}

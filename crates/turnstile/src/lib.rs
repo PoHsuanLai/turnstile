@@ -24,6 +24,7 @@ pub mod link;
 pub mod policy;
 pub mod serve;
 pub mod session;
+pub mod slots;
 
 use backend::real::UinputBackend;
 use clock::Monotonic;

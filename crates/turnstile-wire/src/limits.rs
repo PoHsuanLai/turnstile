@@ -33,8 +33,15 @@ pub const MAX_DEVICES_PER_CONNECTION: usize = 4;
 pub const MAX_CREATES_PER_CONNECTION: u8 = 64;
 /// Handed devices one connection may ask for: the service cannot see them close, so it counts them.
 pub const MAX_HANDED_PER_CONNECTION: u8 = 16;
-/// Connections at once: the units run one palmrest and one keycap, so 16 is generous.
+/// Connections at once from callers that are not palmrest or keycap: the units run one palmrest and
+/// one keycap, so nothing else has a use for more.
 pub const MAX_CONNECTIONS: usize = 16;
+/// Connections at once from one user that is not shown to be palmrest or keycap: one local account
+/// cannot take the slots of the others.
+pub const MAX_CONNECTIONS_PER_USER: usize = 4;
+/// Connections reserved for each of palmrest and keycap once they are proven: a client reconnects
+/// after a cut and may briefly hold the old and the new, so more than one; outside every other cap.
+pub const MAX_RESERVED_PER_CLIENT: usize = 4;
 
 /// `Events` datagrams per second per device: a touchpad frame at 120 Hz is one datagram.
 pub const EVENT_DATAGRAMS_PER_SECOND: u64 = 120;
@@ -48,7 +55,9 @@ pub const FLOOD_GAP_MS: u64 = 1_000;
 /// hostile peer sends them all.
 pub const MAX_DENIED_EVENTS: u32 = 256;
 
-/// A new connection that has made no device in this long is closed.
+/// A new connection of a proven palmrest or keycap that has made no device in this long is closed.
 pub const HANDSHAKE_TIMEOUT_MS: u64 = 1_000;
+/// Any other connection that has made no device in this long is closed: it has no business waiting.
+pub const STRANGER_HANDSHAKE_TIMEOUT_MS: u64 = 200;
 /// The largest wheel step in one event: a fast flick is a few hundred hi-res units.
 pub const MAX_WHEEL_MAGNITUDE: i32 = 1_200;

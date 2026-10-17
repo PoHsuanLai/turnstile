@@ -33,7 +33,7 @@ enum Flow {
     Stop,
 }
 
-/// Serves `conn` until it ends. Never panics on what the peer sends.
+/// Identifies the peer of `conn` and serves it until it ends. Never panics on what the peer sends.
 pub fn serve<B, A, S, C>(conn: OwnedFd, ctx: &Context<B, A, S, C>)
 where
     B: Backend,
@@ -41,14 +41,36 @@ where
     S: SeatSource,
     C: Clock,
 {
-    let caller = match ctx.authority.identify(&conn) {
-        Ok(caller) => caller,
+    if let Some(caller) = identify(&conn, &ctx.authority) {
+        serve_caller(conn, caller, HANDSHAKE_TIMEOUT_MS, ctx);
+    }
+}
+
+/// Names the peer of `conn`; a peer that cannot be named is told so and `None` is returned.
+pub fn identify<A: Authority>(conn: &OwnedFd, authority: &A) -> Option<Caller> {
+    match authority.identify(conn) {
+        Ok(caller) => Some(caller),
         Err(why) => {
             journal::note("refused", &[kv("why", &why)]);
-            let _ = link::send_reply(&conn, &Reply::Refused(Reason::Unknown));
-            return;
+            let _ = link::send_reply(conn, &Reply::Refused(Reason::Unknown));
+            None
         }
-    };
+    }
+}
+
+/// Serves `conn`, whose peer is `caller`, until it ends; a connection that makes no device within
+/// `handshake_ms` is closed. Never panics on what the peer sends.
+pub fn serve_caller<B, A, S, C>(
+    conn: OwnedFd,
+    caller: Caller,
+    handshake_ms: u64,
+    ctx: &Context<B, A, S, C>,
+) where
+    B: Backend,
+    A: Authority,
+    S: SeatSource,
+    C: Clock,
+{
     let admission = CallerAdmission {
         caller: &caller,
         seat: &ctx.seat,
@@ -58,7 +80,7 @@ where
     let mut waiting = None;
     loop {
         let want = match session.phase() {
-            Phase::Handshake => Some(Duration::from_millis(HANDSHAKE_TIMEOUT_MS)),
+            Phase::Handshake => Some(Duration::from_millis(handshake_ms)),
             _ => None,
         };
         if want != waiting {
