@@ -139,14 +139,14 @@ impl UnitText {
         let mut order = Vec::new();
         for dir in manager.dirs() {
             let path = Path::new(dir).join(name.as_str());
-            if let Some(trust) = trust_if_present(fs, &path)? {
-                if matches!(fragment, Fragment::Missing) {
-                    fragment = match trust {
-                        FileTrust::RootOnly => Fragment::RootOwned(path.clone()),
-                        _ => Fragment::Writable(path.clone()),
-                    };
-                    order.push(path);
-                }
+            if let Some(trust) = trust_if_present(fs, &path)?
+                && matches!(fragment, Fragment::Missing)
+            {
+                fragment = match trust {
+                    FileTrust::RootOnly => Fragment::RootOwned(path.clone()),
+                    _ => Fragment::Writable(path.clone()),
+                };
+                order.push(path);
             }
         }
         let (drop_ins, mut files) = drop_in_files(fs, manager, name)?;
