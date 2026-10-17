@@ -118,8 +118,8 @@ Departures from the plan, standing facts and open items. An entry names the cond
    `Pinned::of_stream`, `Prober::system`, `Prober::probe`, `Prober::fs`, `TableFiles::desktop` and
    `TableFiles::load`, `judge`, `Standing::Service`, `roles::{PAD_DAEMON, KEYMAP_DAEMON}`. The lane
    was still moving; if it changes a signature the change is in those two files. `Pinned::of_stream`
-   gives `Pin::Reopened` (rustix 1.1 has no safe `SO_PEERPIDFD`), which this service accepts: it
-   asks for `Proof::Exe`, not for a firm pin.
+   gives `Pin::AtConnect` from peephole 0.1.5 (`SO_PEERPIDFD` through nix) and `Pin::Reopened` on a
+   kernel before 6.5; this service accepts either: it asks for `Proof::Exe`, not for a firm pin.
 2. `input-linux` 0.7.1's `UInputHandle::create` calls `UI_DEV_SETUP`, then `UI_ABS_SETUP` for each axis,
    then `UI_DEV_CREATE`; that the kernel accepts the axes after `UI_DEV_SETUP` (it does in
    `drivers/input/misc/uinput.c`, `uinput_abs_setup` only needs the absbit and a device not yet created).
@@ -128,8 +128,9 @@ Departures from the plan, standing facts and open items. An entry names the cond
    `systemd-analyze security turnstile.service`.
 4. `rustix` 1.1: `recv` returns `(output, real_len)`; `RecvFlags::TRUNC` on `SOCK_SEQPACKET`
    reports the real length; `SO_RCVTIMEO` on an accepted socket ends `recv` with `EAGAIN`.
-5. `SO_PEERPIDFD` needs kernel 6.5 (peephole's `Pinned::of_stream`); an older kernel refuses every
-   caller, which is the intended fail-closed behaviour.
+5. `SO_PEERPIDFD` needs kernel 6.5 (peephole's `Pinned::of_stream`); an older kernel gets the reopened
+   pin. `getsockopt` is in `@system-service`, so the unit's `SystemCallFilter` lets it through (read,
+   not run under the unit).
 6. SELinux on Fedora lets an unconfined service domain open `/dev/uinput` and `/proc/<pid>/exe` of a
    user process.
 7. NEW-FA-3: `rustix::net::sockopt::socket_peercred(&OwnedFd)` returns `UCred` with `uid.as_raw()`
@@ -142,12 +143,11 @@ Departures from the plan, standing facts and open items. An entry names the cond
 
 ## Deferred
 
-- **Socket peers are pinned with `Pin::Reopened`, not `Pin::AtConnect`.** `Pinned::of_stream` reads
-  `SO_PEERCRED`, opens a pidfd and re-reads to compare, because rustix 1.1.5 has no safe
-  `SO_PEERPIDFD`. The service therefore never asks for `PinNeed::AtConnect` (it judges a `Standing` and
-  needs `Proof::Exe`, not a pin level). The remaining gap is a connecting process that dies and has its
-  pid reused within the milliseconds before the pidfd opens. Closes when rustix gains the wrapper and
-  peephole returns `AtConnect`: then require it in `policy.rs`.
+- **Requiring `Pin::AtConnect`.** Since peephole 0.1.6 (`SO_PEERPIDFD` through nix, owner allowed nix
+  2026-10-17) a socket peer is pinned at connect on every supported distro's kernel (6.5+), so the
+  recycled-pid window is closed there. The service still accepts the reopened pin a kernel before 6.5
+  gives (it judges a `Standing` at `Proof::Exe`, not a pin level); refusing it is a one-line
+  `PinNeed::AtConnect` check in `policy.rs`, not done until a supported kernel lacks the option.
 
 ## Open items
 
