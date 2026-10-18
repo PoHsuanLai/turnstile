@@ -89,8 +89,7 @@ impl Link {
             RecvFlags::DONTWAIT | RecvFlags::CMSG_CLOEXEC | RecvFlags::TRUNC,
         ) {
             Ok(got) => got,
-            Err(Errno::AGAIN) => return Ok(None),
-            Err(Errno::INTR) => return Ok(None),
+            Err(Errno::AGAIN | Errno::INTR) => return Ok(None),
             Err(Errno::CONNRESET) => return Err(ClientError::Closed),
             Err(e) => return Err(ClientError::Io(e.into())),
         };

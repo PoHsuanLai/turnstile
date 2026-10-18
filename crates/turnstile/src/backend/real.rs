@@ -66,6 +66,7 @@ impl Device for UinputDevice {
     fn write(&mut self, events: &[Event]) -> Result<(), BackendError> {
         let raw = events
             .iter()
+            .copied()
             .map(raw_event)
             .collect::<io::Result<Vec<sys::input_event>>>()
             .map_err(BackendError::Write)?;
@@ -92,7 +93,7 @@ fn range(_: RangeError) -> io::Error {
     )
 }
 
-fn raw_event(event: &Event) -> io::Result<sys::input_event> {
+fn raw_event(event: Event) -> io::Result<sys::input_event> {
     let kind = EventKind::from_type(event.kind).map_err(range)?;
     Ok(input_linux::InputEvent {
         time: EventTime::new(0, 0),

@@ -41,9 +41,9 @@ pub fn encode_request(request: &Request) -> Result<Vec<u8>, WireError> {
                 return Err(WireError::Truncated);
             }
             out.extend([TAG_EVENTS, device.0]);
-            events
-                .iter()
-                .for_each(|e| out.extend_from_slice(&e.to_bytes()));
+            for e in events {
+                out.extend_from_slice(&e.to_bytes());
+            }
         }
         Request::Destroy { device } => out.extend([TAG_DESTROY, device.0]),
     }

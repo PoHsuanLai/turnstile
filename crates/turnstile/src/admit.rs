@@ -29,17 +29,16 @@ where
     let bucket = Bucket::of(&caller, ctx.seat.active_uid());
     let taken = slots.take(bucket);
     drop(ticket);
-    match taken {
-        Ok(slot) => serve_caller(conn, caller, slot.bucket().handshake_ms(), ctx),
-        Err(_) => {
-            journal::note(
-                "refused",
-                &[
-                    kv("caller", &caller.describe()),
-                    kv("why", &"too many connections"),
-                ],
-            );
-            let _ = link::send_reply(&conn, &Reply::Refused(Reason::TooMany));
-        }
+    if let Ok(slot) = taken {
+        serve_caller(conn, caller, slot.bucket().handshake_ms(), ctx);
+    } else {
+        journal::note(
+            "refused",
+            &[
+                kv("caller", &caller.describe()),
+                kv("why", &"too many connections"),
+            ],
+        );
+        let _ = link::send_reply(&conn, &Reply::Refused(Reason::TooMany));
     }
 }

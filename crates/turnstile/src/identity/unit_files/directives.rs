@@ -68,15 +68,12 @@ fn logical_lines(text: &str) -> Vec<String> {
     let mut lines = Vec::new();
     let mut open = String::new();
     for raw in text.lines() {
-        match raw.strip_suffix('\\') {
-            Some(head) => {
-                open.push_str(head);
-                open.push(' ');
-            }
-            None => {
-                open.push_str(raw);
-                lines.push(std::mem::take(&mut open));
-            }
+        if let Some(head) = raw.strip_suffix('\\') {
+            open.push_str(head);
+            open.push(' ');
+        } else {
+            open.push_str(raw);
+            lines.push(std::mem::take(&mut open));
         }
     }
     if !open.is_empty() {

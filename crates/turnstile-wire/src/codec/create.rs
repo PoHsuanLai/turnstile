@@ -85,9 +85,9 @@ pub(super) fn write(create: &Create, out: &mut Vec<u8>) -> Result<(), WireError>
         Detail::None => {}
         Detail::Keys(codes) => {
             out.push(check_len("the key list", codes.len(), MAX_KEY_CODES)?);
-            codes
-                .iter()
-                .for_each(|c| out.extend_from_slice(&c.to_le_bytes()));
+            for c in codes {
+                out.extend_from_slice(&c.to_le_bytes());
+            }
         }
         Detail::Pointer(caps) => write_pointer(caps, out)?,
     }
@@ -101,8 +101,9 @@ fn write_pointer(caps: &PointerCaps, out: &mut Vec<u8>) -> Result<(), WireError>
     out.extend_from_slice(&caps.product.to_le_bytes());
     for list in [&caps.props, &caps.buttons, &caps.rels] {
         out.push(u8::try_from(list.len()).map_err(|_| WireError::Detail)?);
-        list.iter()
-            .for_each(|c| out.extend_from_slice(&c.to_le_bytes()));
+        for c in list {
+            out.extend_from_slice(&c.to_le_bytes());
+        }
     }
     out.push(u8::try_from(caps.abs.len()).map_err(|_| WireError::Detail)?);
     for axis in &caps.abs {
