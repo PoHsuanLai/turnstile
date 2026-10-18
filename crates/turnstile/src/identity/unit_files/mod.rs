@@ -25,7 +25,7 @@ mod directives;
 mod process;
 
 use directives::ServiceSettings;
-use peephole::{ProcFs, dirs_trust, weaker};
+use peephole::{ProcFs, path_trust};
 use peephole_core::{
     CgroupPath, DropIns, ExePath, FileTrust, Fragment, Loader, Pid, Transient, UnitFacts, UnitName,
 };
@@ -144,8 +144,8 @@ impl UnitText {
                 && matches!(fragment, Fragment::Missing)
             {
                 fragment = match trust {
-                    FileTrust::RootOnly => Fragment::RootOwned(path.clone()),
-                    _ => Fragment::Writable(path.clone()),
+                    FileTrust::RootOnly => Fragment::RootOwned,
+                    _ => Fragment::Writable,
                 };
                 order.push(path);
             }
@@ -166,7 +166,7 @@ impl UnitText {
             .iter()
             .try_fold(ServiceSettings::default(), |acc, path| {
                 let bytes = fs
-                    .read_file_capped(path, UNIT_FILE_CAP)
+                    .read_capped(path, UNIT_FILE_CAP)
                     .map_err(|e| read_fault(path, &e))?;
                 let text = String::from_utf8(bytes)
                     .map_err(|_| NotUnit::Read(format!("{} is not text", path.display())))?;
@@ -216,11 +216,8 @@ fn conf_files<P: ProcFs>(fs: &P, folder: &Path) -> Result<Vec<PathBuf>, NotUnit>
 
 /// The trust of `path` and every folder above it; `None` when there is no such file.
 fn trust_if_present<P: ProcFs>(fs: &P, path: &Path) -> Result<Option<FileTrust>, NotUnit> {
-    match fs.trust_of(path) {
-        Ok(file) => {
-            let above = dirs_trust(fs, path).map_err(|e| read_fault(path, &e))?;
-            Ok(Some(weaker(above, file)))
-        }
+    match path_trust(fs, path) {
+        Ok(trust) => Ok(Some(trust)),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(read_fault(path, &e)),
     }

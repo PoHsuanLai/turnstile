@@ -10,7 +10,6 @@
 
 use peephole::ProcFs;
 use peephole_core::Pid;
-use std::path::PathBuf;
 /// The most of a process's status file that is read.
 pub const STATUS_CAP: u64 = 16 * 1024;
 
@@ -37,7 +36,10 @@ pub fn tracer_of(status: &str) -> Option<u32> {
 /// Checks the process `pid` through `fs`: nobody is tracing it.
 pub fn check<P: ProcFs>(fs: &P, pid: Pid) -> Result<(), ProcessFault> {
     let status = fs
-        .read_capped(&PathBuf::from(format!("{pid}/status")), STATUS_CAP)
+        .read_capped(
+            &fs.proc_root().join(pid.to_string()).join("status"),
+            STATUS_CAP,
+        )
         .map_err(|_| ProcessFault::Unreadable("its status"))?;
     let status = String::from_utf8(status).map_err(|_| ProcessFault::Unreadable("its status"))?;
     match tracer_of(&status) {
