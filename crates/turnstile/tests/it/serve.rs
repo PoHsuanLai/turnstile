@@ -141,7 +141,7 @@ fn a_peer_that_cannot_be_identified_is_refused_before_anything_else() {
     let kernel = turnstile::backend::fake::FakeBackend::new();
     let ctx = Arc::new(Context {
         backend: kernel.clone(),
-        authority: FixedAuthority::failing("no such process"),
+        authority: FixedAuthority::failing(),
         seat: FixedSeat(ActiveUid(Some(USER))),
         clock: turnstile::clock::ManualClock::new(),
     });

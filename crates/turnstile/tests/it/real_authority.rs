@@ -335,5 +335,5 @@ fn a_peer_the_probe_cannot_find_is_a_failure_not_a_guess() {
     );
     assert!(authority.identify(&socket()).is_err());
     // And the fixed authority used by the other tests fails the same way when told to.
-    assert!(FixedAuthority::failing("x").identify(&socket()).is_err());
+    assert!(FixedAuthority::failing().identify(&socket()).is_err());
 }

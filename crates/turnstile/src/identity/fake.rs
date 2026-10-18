@@ -2,30 +2,33 @@
 //! pair, where no real process stands behind the other end.
 
 use super::{Authority, Caller, IdentifyError};
+use peephole::PinError;
 use std::os::fd::OwnedFd;
 
-/// Names every peer as `caller`, or fails with `message`.
+/// Names every peer as `caller`, or cannot pin any (the process is gone).
 #[derive(Debug, Clone)]
 pub struct FixedAuthority {
-    answer: Result<Caller, String>,
+    answer: Option<Caller>,
 }
 
 impl FixedAuthority {
     /// Every peer is `caller`.
     pub fn naming(caller: Caller) -> Self {
-        Self { answer: Ok(caller) }
+        Self {
+            answer: Some(caller),
+        }
     }
 
     /// No peer can be identified.
-    pub fn failing(message: impl Into<String>) -> Self {
-        Self {
-            answer: Err(message.into()),
-        }
+    pub fn failing() -> Self {
+        Self { answer: None }
     }
 }
 
 impl Authority for FixedAuthority {
     fn identify(&self, _conn: &OwnedFd) -> Result<Caller, IdentifyError> {
-        self.answer.clone().map_err(IdentifyError::Pin)
+        self.answer
+            .clone()
+            .ok_or(IdentifyError::Pin(PinError::PeerGone))
     }
 }

@@ -9,7 +9,9 @@ pub mod peephole_authority;
 pub mod seat;
 pub mod unit_files;
 
+use peephole::{LoadError, PinError, ProbeError};
 use peephole_core::{Proof, RoleName};
+use rustix::io::Errno;
 use rustix::net::sockopt::socket_peercred;
 use std::os::fd::OwnedFd;
 
@@ -61,13 +63,16 @@ impl Caller {
 pub enum IdentifyError {
     /// The kernel would not name the process (an old kernel, or it is gone).
     #[error("the caller could not be pinned: {0}")]
-    Pin(String),
+    Pin(#[source] PinError),
     /// Its facts could not be read.
     #[error("the caller's facts could not be read: {0}")]
-    Facts(String),
+    Facts(#[source] ProbeError),
     /// The table of desktop programs could not be read.
     #[error("the table of desktop programs could not be read: {0}")]
-    Table(String),
+    Table(#[source] LoadError),
+    /// The kernel would not name the user behind the socket.
+    #[error("the user behind the socket could not be named: {0}")]
+    Peer(#[source] Errno),
 }
 
 /// Names the process behind a connection.
@@ -81,7 +86,7 @@ pub trait Authority: Send + Sync + 'static {
     fn peer_uid(&self, conn: &OwnedFd) -> Result<u32, IdentifyError> {
         socket_peercred(conn)
             .map(|cred| cred.uid.as_raw())
-            .map_err(|e| IdentifyError::Pin(e.to_string()))
+            .map_err(IdentifyError::Peer)
     }
 }
 

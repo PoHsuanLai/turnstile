@@ -38,17 +38,17 @@ impl<P: ProcFs> PeepholeAuthority<P> {
 
 impl<P: ProcFs + 'static> Authority for PeepholeAuthority<P> {
     fn identify(&self, conn: &OwnedFd) -> Result<Caller, IdentifyError> {
-        let pinned = Pinned::of_stream(conn).map_err(|e| IdentifyError::Pin(e.to_string()))?;
+        let pinned = Pinned::of_stream(conn).map_err(IdentifyError::Pin)?;
         let facts = self
             .prober
             .probe(&pinned, None)
-            .map_err(|e| IdentifyError::Facts(e.to_string()))?;
+            .map_err(IdentifyError::Facts)?;
         // The table is read after the process is held, and again for every connection: a few small
         // files, and a change of the table takes effect at the next connection.
         let table = self
             .files
             .load(self.prober.fs())
-            .map_err(|e| IdentifyError::Table(e.to_string()))?;
+            .map_err(IdentifyError::Table)?;
         let (facts, standing) = self.prove_unit(&pinned, facts, &table);
         Ok(Caller {
             pid: facts.pid.get(),
