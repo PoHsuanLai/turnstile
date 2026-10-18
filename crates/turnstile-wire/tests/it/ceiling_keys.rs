@@ -3,7 +3,7 @@
 use crate::{key, sync};
 use turnstile_wire::codes::*;
 use turnstile_wire::limits::{MAX_KEY_CODES, MAX_KEYS_DOWN};
-use turnstile_wire::{BadCaps, Create, Denial, Event, Filter, Verdict, plan};
+use turnstile_wire::{BadCaps, Create, Denial, Event, Filter, Route, Verdict, plan};
 
 const A: u16 = 30;
 const ENTER: u16 = 28;
@@ -12,10 +12,11 @@ const F5: u16 = 63;
 const SHIFT: u16 = KEY_LEFTSHIFT;
 
 fn filter(codes: &[u16]) -> Filter {
-    plan(&Create::keys(codes.to_vec()))
-        .expect("within the ceiling")
-        .filter
-        .expect("proxied")
+    let planned = plan(&Create::keys(codes.to_vec())).expect("within the ceiling");
+    let Route::Proxied(filter) = planned.route else {
+        panic!("proxied");
+    };
+    filter
 }
 
 fn verdict(f: &mut Filter, event: Event) -> Result<(), Denial> {

@@ -1,7 +1,7 @@
 //! palmrest's wheel: four relative axes and nothing else.
 
-use super::Plan;
 use super::filter::{Denial, Filter, Verdict};
+use super::{Plan, Route};
 use crate::codes::{
     EV_REL, EV_SYN, REL_HWHEEL, REL_HWHEEL_HI_RES, REL_WHEEL, REL_WHEEL_HI_RES, SYN_REPORT,
 };
@@ -26,7 +26,7 @@ pub(super) fn plan(maker: Maker) -> Plan {
             props: Vec::new(),
             leds: Vec::new(),
         },
-        filter: Some(Filter::Wheel),
+        route: Route::Proxied(Filter::Wheel),
     }
 }
 

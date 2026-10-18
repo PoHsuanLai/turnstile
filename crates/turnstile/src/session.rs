@@ -10,18 +10,8 @@ use turnstile_wire::limits::{
 };
 use turnstile_wire::{
     Admit, Create, Delivery, DeviceId, Event, Filter, Kind, Limiter, Millis, Reason, Reply,
-    Request, plan,
+    Request, Route, plan,
 };
-
-/// What to do with the connection after a request.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Step {
-    /// Keep reading.
-    Continue,
-    /// Close it: the peer was refused.
-    Close,
-}
 
 /// A reply, with the descriptor that rides with it when the device is handed over.
 #[derive(Debug)]
@@ -48,39 +38,34 @@ pub struct Note {
 
 /// What a request led to.
 #[derive(Debug)]
-pub struct Handled {
-    /// Replies to send, in order.
-    pub out: Vec<Outgoing>,
-    /// What to do with the connection.
-    pub step: Step,
-    /// Set when the peer was refused.
-    pub note: Option<Note>,
+pub enum Handled {
+    /// Keep reading, after sending the reply if there is one.
+    Go(Option<Outgoing>),
+    /// The peer was refused: send it `Refused(reason)`, log the note and close the connection.
+    Refuse {
+        /// What the peer is told.
+        reason: Reason,
+        /// What goes to the log.
+        note: Note,
+    },
 }
 
 impl Handled {
     fn go() -> Self {
-        Self {
-            out: Vec::new(),
-            step: Step::Continue,
-            note: None,
-        }
+        Self::Go(None)
     }
 
     fn reply(out: Outgoing) -> Self {
-        Self {
-            out: vec![out],
-            ..Self::go()
-        }
+        Self::Go(Some(out))
     }
 
     fn refuse(reason: Reason, kind: Option<Kind>, why: impl ToString) -> Self {
-        Self {
-            out: vec![Outgoing::Reply(Reply::Refused(reason))],
-            step: Step::Close,
-            note: Some(Note {
+        Self::Refuse {
+            reason,
+            note: Note {
                 kind,
                 why: why.to_string(),
-            }),
+            },
         }
     }
 }
@@ -190,8 +175,8 @@ impl<'a, B: Backend, A: Admission> Session<'a, B, A> {
         // `created` is at most 64, so the id never wraps and is never reused on a connection.
         let id = DeviceId(self.created);
         self.created += 1;
-        match (planned.filter, delivery) {
-            (Some(filter), Delivery::Proxied) => {
+        match planned.route {
+            Route::Proxied(filter) => {
                 self.slots.push(Slot {
                     id,
                     device,
@@ -203,7 +188,7 @@ impl<'a, B: Backend, A: Admission> Session<'a, B, A> {
                     delivery: Delivery::Proxied,
                 }))
             }
-            (None, Delivery::Handed) => {
+            Route::Handed => {
                 self.handed += 1;
                 Handled::reply(Outgoing::Handed {
                     reply: Reply::Created {
@@ -213,8 +198,6 @@ impl<'a, B: Backend, A: Admission> Session<'a, B, A> {
                     fd: device.into_fd(),
                 })
             }
-            // The ceiling and the kind disagree about delivery: a bug here, so make nothing.
-            _ => Handled::refuse(Reason::Unavailable, kind, "the device kind is inconsistent"),
         }
     }
 

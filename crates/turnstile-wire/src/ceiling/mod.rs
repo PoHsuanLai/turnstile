@@ -16,13 +16,22 @@ pub use keycap::{KEYBOARD_NAME, POINTER_SUFFIX};
 use crate::message::Create;
 use crate::spec::DeviceSpec;
 
+/// How events of a planned device reach the kernel.
+#[derive(Debug)]
+pub enum Route {
+    /// The service writes each event after the ceiling `Filter` has passed it.
+    Proxied(Filter),
+    /// The device is handed over, and its events are never the service's to see.
+    Handed,
+}
+
 /// What the service does for one `Create`.
 #[derive(Debug)]
 pub struct Plan {
     /// The device to make.
     pub spec: DeviceSpec,
-    /// The ceiling for its events; `None` for a handed device, whose events the service never sees.
-    pub filter: Option<Filter>,
+    /// How its events reach the kernel.
+    pub route: Route,
 }
 
 /// Why a request is outside the ceiling.

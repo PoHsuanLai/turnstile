@@ -2,12 +2,15 @@
 
 use turnstile_wire::ceiling::{KEYBOARD_NAME, POINTER_SUFFIX};
 use turnstile_wire::codes::*;
-use turnstile_wire::{AbsAxis, BadCaps, Create, PointerCaps, plan};
+use turnstile_wire::{AbsAxis, BadCaps, Create, PointerCaps, Route, plan};
 
 #[test]
 fn the_keyboard_is_the_full_keyboard_of_keycap() {
     let p = plan(&Create::keyboard()).expect("plans");
-    assert!(p.filter.is_none(), "handed devices are not filtered");
+    assert!(
+        matches!(p.route, Route::Handed),
+        "handed devices are not filtered"
+    );
     let spec = p.spec;
     assert_eq!(spec.name, KEYBOARD_NAME);
     assert_eq!((spec.vendor, spec.product), (0x4b43, 0x0001));

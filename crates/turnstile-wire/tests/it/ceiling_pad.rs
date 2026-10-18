@@ -2,13 +2,13 @@
 
 use crate::{abs, key, rel, sync};
 use turnstile_wire::codes::*;
-use turnstile_wire::{Create, Denial, Event, Filter, Verdict, plan};
+use turnstile_wire::{Create, Denial, Event, Filter, Route, Verdict, plan};
 
 fn filter(create: &Create) -> Filter {
-    plan(create)
-        .expect("within the ceiling")
-        .filter
-        .expect("a proxied kind")
+    let Route::Proxied(filter) = plan(create).expect("within the ceiling").route else {
+        panic!("a proxied kind");
+    };
+    filter
 }
 
 fn pass_all(f: &mut Filter, events: &[Event]) {

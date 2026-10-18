@@ -5,7 +5,7 @@
 //! is the caller's identity.
 
 use super::filter::{Denial, Filter, Verdict};
-use super::{BadCaps, Plan};
+use super::{BadCaps, Plan, Route};
 use crate::codes::{EV_KEY, EV_SYN, KEY_LEFTALT, KEY_LEFTCTRL, KEY_LEFTMETA, SYN_REPORT};
 use crate::event::Event;
 use crate::keytable::{KeyClass, class_of};
@@ -41,7 +41,7 @@ pub(super) fn plan(maker: Maker, requested: &[u16]) -> Result<Plan, BadCaps> {
             props: Vec::new(),
             leds: Vec::new(),
         },
-        filter: Some(Filter::Keys(KeysState {
+        route: Route::Proxied(Filter::Keys(KeysState {
             allowed: keys,
             down: Vec::new(),
         })),

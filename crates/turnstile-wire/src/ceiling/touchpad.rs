@@ -1,7 +1,7 @@
 //! palmrest's touchpad: exactly the capabilities of its `touchpad_caps`, with the fixed ranges.
 
-use super::Plan;
 use super::filter::{Denial, Filter, Verdict};
+use super::{Plan, Route};
 use crate::codes::{
     ABS_MT_POSITION_X, ABS_MT_POSITION_Y, ABS_MT_SLOT, ABS_MT_TRACKING_ID, ABS_X, ABS_Y, BTN_LEFT,
     BTN_TOOL_DOUBLETAP, BTN_TOOL_FINGER, BTN_TOOL_QUADTAP, BTN_TOOL_TRIPLETAP, BTN_TOUCH, EV_ABS,
@@ -60,7 +60,7 @@ pub(super) fn plan(maker: Maker) -> Plan {
             props: vec![INPUT_PROP_POINTER],
             leds: Vec::new(),
         },
-        filter: Some(Filter::Touchpad(TouchpadState::default())),
+        route: Route::Proxied(Filter::Touchpad(TouchpadState::default())),
     }
 }
 

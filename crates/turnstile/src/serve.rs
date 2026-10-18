@@ -7,7 +7,8 @@ use crate::identity::{Authority, Caller, SeatSource};
 use crate::journal::{self, kv};
 use crate::link::{self, Inbox, Incoming};
 use crate::policy::CallerAdmission;
-use crate::session::{Handled, Outgoing, Phase, Session, Step};
+use crate::session::{Handled, Outgoing, Phase, Session};
+use std::ops::ControlFlow;
 use std::os::fd::OwnedFd;
 use std::time::Duration;
 use turnstile_wire::limits::HANDSHAKE_TIMEOUT_MS;
@@ -24,13 +25,6 @@ pub struct Context<B, A, S, C> {
     pub seat: S,
     /// Tells the time.
     pub clock: C,
-}
-
-/// Whether to go on after a reply.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Flow {
-    On,
-    Stop,
 }
 
 /// Identifies the peer of `conn` and serves it until it ends. Never panics on what the peer sends.
@@ -108,7 +102,7 @@ pub fn serve_caller<B, A, S, C>(
                 break;
             }
         };
-        if deliver(&conn, &caller, handled) == Flow::Stop {
+        if deliver(&conn, &caller, handled).is_break() {
             break;
         }
     }
@@ -125,30 +119,32 @@ pub fn serve_caller<B, A, S, C>(
     }
 }
 
-/// Logs a refusal and sends the replies; stops when the session says so or a reply cannot go.
-fn deliver(conn: &OwnedFd, caller: &Caller, handled: Handled) -> Flow {
-    if let Some(note) = &handled.note {
-        let kind = note.kind.map_or("?", |k| k.name());
-        journal::note(
-            "refused",
-            &[
-                kv("caller", &caller.describe()),
-                kv("kind", &kind),
-                kv("why", &note.why),
-            ],
-        );
-    }
-    for out in handled.out {
-        let sent = match &out {
-            Outgoing::Reply(reply) => link::send_reply(conn, reply),
-            Outgoing::Handed { reply, fd } => link::send_reply_with_fd(conn, reply, fd),
-        };
-        if sent.is_err() {
-            return Flow::Stop;
+/// Logs a refusal and sends the reply; breaks when the peer was refused or a reply cannot go.
+fn deliver(conn: &OwnedFd, caller: &Caller, handled: Handled) -> ControlFlow<()> {
+    match handled {
+        Handled::Go(None) => ControlFlow::Continue(()),
+        Handled::Go(Some(out)) => {
+            let sent = match &out {
+                Outgoing::Reply(reply) => link::send_reply(conn, reply),
+                Outgoing::Handed { reply, fd } => link::send_reply_with_fd(conn, reply, fd),
+            };
+            match sent {
+                Ok(()) => ControlFlow::Continue(()),
+                Err(_) => ControlFlow::Break(()),
+            }
         }
-    }
-    match handled.step {
-        Step::Continue => Flow::On,
-        _ => Flow::Stop,
+        Handled::Refuse { reason, note } => {
+            let kind = note.kind.map_or("?", |k| k.name());
+            journal::note(
+                "refused",
+                &[
+                    kv("caller", &caller.describe()),
+                    kv("kind", &kind),
+                    kv("why", &note.why),
+                ],
+            );
+            let _ = link::send_reply(conn, &Reply::Refused(reason));
+            ControlFlow::Break(())
+        }
     }
 }

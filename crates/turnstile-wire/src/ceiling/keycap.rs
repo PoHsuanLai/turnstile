@@ -6,7 +6,7 @@
 //! ranges and pointer properties, so the device the service makes can never register a key below
 //! `BTN_MISC`. A pointer whose request has nothing left after the cut is refused.
 
-use super::{BadCaps, Plan};
+use super::{BadCaps, Plan, Route};
 use crate::codes::{
     ABS_MAX, KEY_MAX, LED_CAPSL, LED_NUML, LED_SCROLLL, REL_HWHEEL, REL_HWHEEL_HI_RES, REL_MAX,
     REL_WHEEL, REL_WHEEL_HI_RES, REL_X, REL_Y,
@@ -52,7 +52,7 @@ pub(super) fn keyboard(maker: Maker) -> Plan {
             props: Vec::new(),
             leds: vec![LED_NUML, LED_CAPSL, LED_SCROLLL],
         },
-        filter: None,
+        route: Route::Handed,
     }
 }
 
@@ -76,7 +76,7 @@ pub(super) fn pointer(maker: Maker, caps: &PointerCaps) -> Result<Plan, BadCaps>
             props,
             leds: Vec::new(),
         },
-        filter: None,
+        route: Route::Handed,
     })
 }
 

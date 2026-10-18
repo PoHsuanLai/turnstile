@@ -1,7 +1,7 @@
 use peephole_core::roles::{KEYMAP_DAEMON, PAD_DAEMON};
 use turnstile::backend::fake::{FakeBackend, Fate};
 use turnstile::policy::AllowKinds;
-use turnstile::session::{Outgoing, Phase, Session, Step};
+use turnstile::session::{Handled, Outgoing, Phase, Session};
 use turnstile_wire::codes::*;
 use turnstile_wire::limits::{
     EVENT_BURST, FLOOD_CUT_MS, MAX_CREATES_PER_CONNECTION, MAX_DENIED_EVENTS,
@@ -15,22 +15,22 @@ fn all() -> AllowKinds {
     AllowKinds(Kind::ALL.to_vec())
 }
 
-fn refused(handled: &turnstile::session::Handled) -> Option<Reason> {
-    match handled.out.as_slice() {
-        [Outgoing::Reply(Reply::Refused(reason))] => Some(*reason),
-        _ => None,
+fn refused(handled: &Handled) -> Option<Reason> {
+    match handled {
+        Handled::Refuse { reason, .. } => Some(*reason),
+        Handled::Go(_) => None,
     }
 }
 
-fn created(handled: &turnstile::session::Handled) -> Option<(DeviceId, Delivery)> {
-    match handled.out.as_slice() {
-        [Outgoing::Reply(Reply::Created { device, delivery })]
-        | [
-            Outgoing::Handed {
+fn created(handled: &Handled) -> Option<(DeviceId, Delivery)> {
+    match handled {
+        Handled::Go(Some(
+            Outgoing::Reply(Reply::Created { device, delivery })
+            | Outgoing::Handed {
                 reply: Reply::Created { device, delivery },
                 ..
             },
-        ] => Some((*device, *delivery)),
+        )) => Some((*device, *delivery)),
         _ => None,
     }
 }
@@ -57,12 +57,11 @@ fn a_palmrest_device_is_made_fed_and_destroyed_with_the_connection() {
 
     let made = s.handle(T0, Request::Create(Create::wheel()));
     assert_eq!(created(&made), Some((DeviceId(0), Delivery::Proxied)));
-    assert_eq!(made.step, Step::Continue);
     assert_eq!(s.phase(), Phase::Serving);
     assert_eq!(backend.log().specs[0].name, "palmrest wheel");
 
     let fed = s.handle(T0, events(0, vec![wheel(-1), Event::SYNC]));
-    assert!(fed.out.is_empty() && fed.step == Step::Continue);
+    assert!(matches!(fed, Handled::Go(None)));
     assert_eq!(backend.log().writes, [(0, vec![wheel(-1), Event::SYNC])]);
 
     drop(s);
@@ -78,7 +77,7 @@ fn only_the_events_inside_the_ceiling_reach_the_kernel() {
     let typed = Event::new(EV_KEY, 30, 1);
     let ctrl = Event::new(EV_KEY, 29, 1);
     let handled = s.handle(T0, events(0, vec![typed, ctrl, typed, Event::SYNC]));
-    assert_eq!(handled.step, Step::Continue);
+    assert!(matches!(handled, Handled::Go(_)));
     // The letter before control is held is dropped; the same letter after it goes through.
     assert_eq!(backend.log().writes, [(0, vec![ctrl, typed, Event::SYNC])]);
     assert_eq!(s.stats().denied_events, 1);
@@ -96,12 +95,11 @@ fn a_destroyed_device_is_gone_and_events_for_it_end_the_connection() {
             device: DeviceId(0),
         },
     );
-    assert_eq!(gone.step, Step::Continue);
+    assert!(matches!(gone, Handled::Go(None)));
     assert_eq!(s.held(), 0);
     assert_eq!(backend.log().fates, [Fate::Destroyed]);
     let after = s.handle(T0, events(0, vec![wheel(1)]));
     assert_eq!(refused(&after), Some(Reason::Unknown));
-    assert_eq!(after.step, Step::Close);
 }
 
 #[test]
@@ -111,7 +109,7 @@ fn a_handed_device_leaves_the_service_and_is_not_filtered() {
     let mut s = Session::new(&backend, &admission);
     let made = s.handle(T0, Request::Create(Create::keyboard()));
     assert_eq!(created(&made), Some((DeviceId(0), Delivery::Handed)));
-    assert!(matches!(made.out.as_slice(), [Outgoing::Handed { .. }]));
+    assert!(matches!(made, Handled::Go(Some(Outgoing::Handed { .. }))));
     assert_eq!(s.held(), 0, "the client owns it now");
     assert_eq!(backend.log().fates, [Fate::Handed]);
     assert_eq!(backend.log().specs[0].name, "keycap keyboard");
@@ -144,9 +142,10 @@ fn a_kind_the_caller_may_not_have_is_refused_and_nothing_is_made() {
     let admission = AllowKinds(vec![Kind::PalmrestWheel]);
     let mut s = Session::new(&backend, &admission);
     let handled = s.handle(T0, Request::Create(Create::keyboard()));
-    assert_eq!(refused(&handled), Some(Reason::NotAllowed));
-    assert_eq!(handled.step, Step::Close);
-    let note = handled.note.expect("a refusal is noted for the log");
+    let Handled::Refuse { reason, note } = handled else {
+        panic!("a refusal is noted for the log");
+    };
+    assert_eq!(reason, Reason::NotAllowed);
     assert_eq!(note.kind, Some(Kind::KeycapKeyboard));
     assert!(backend.log().specs.is_empty());
 }
@@ -161,7 +160,6 @@ fn requests_outside_the_ceiling_or_the_kernel_are_refused_with_their_reasons() {
     backend.log().fail_create = Some(std::io::ErrorKind::PermissionDenied);
     let unavailable = s.handle(T0, Request::Create(Create::wheel()));
     assert_eq!(refused(&unavailable), Some(Reason::Unavailable));
-    assert_eq!(unavailable.step, Step::Close);
 }
 
 #[test]
@@ -212,7 +210,7 @@ fn events_above_the_rate_are_dropped_counted_and_a_sustained_flood_is_cut() {
     let one = || events(0, vec![wheel(1), Event::SYNC]);
     // A burst at one instant: the first EVENT_BURST pass, the rest are dropped without ending the connection.
     for _ in 0..100 {
-        assert_eq!(s.handle(T0, one()).step, Step::Continue);
+        assert!(matches!(s.handle(T0, one()), Handled::Go(_)));
     }
     assert_eq!(backend.log().writes.len() as u64, EVENT_BURST);
     assert_eq!(s.stats().dropped_datagrams, 100 - EVENT_BURST);
@@ -220,13 +218,13 @@ fn events_above_the_rate_are_dropped_counted_and_a_sustained_flood_is_cut() {
     let mut ended = None;
     for ms in 0..=FLOOD_CUT_MS + 500 {
         let handled = s.handle(Millis(ms), one());
-        if handled.step == Step::Close {
-            ended = Some((ms, refused(&handled)));
+        if let Some(reason) = refused(&handled) {
+            ended = Some((ms, reason));
             break;
         }
     }
     let (at, reason) = ended.expect("a flood is cut");
-    assert_eq!(reason, Some(Reason::TooMany));
+    assert_eq!(reason, Reason::TooMany);
     assert!(at >= FLOOD_CUT_MS, "cut at {at} ms");
 }
 
@@ -242,8 +240,8 @@ fn a_peer_that_keeps_sending_what_the_ceiling_refuses_is_cut() {
     for _ in 0..10 {
         ms += 100;
         let handled = s.handle(Millis(ms), events(0, hostile.clone()));
-        if handled.step == Step::Close {
-            ended = refused(&handled);
+        if let Some(reason) = refused(&handled) {
+            ended = Some(reason);
             break;
         }
     }
@@ -264,7 +262,6 @@ fn a_failing_write_ends_the_connection_with_a_reason() {
     backend.log().fail_write = Some(std::io::ErrorKind::BrokenPipe);
     let handled = s.handle(T0, events(0, vec![wheel(1), Event::SYNC]));
     assert_eq!(refused(&handled), Some(Reason::Unavailable));
-    assert_eq!(handled.step, Step::Close);
 }
 
 #[test]
@@ -276,7 +273,7 @@ fn devices_of_one_connection_are_independent() {
     s.handle(T0, Request::Create(Create::wheel()));
     // A wheel event sent to the touchpad is outside the touchpad's ceiling.
     let wrong = s.handle(T0, events(0, vec![wheel(1)]));
-    assert_eq!(wrong.step, Step::Continue);
+    assert!(matches!(wrong, Handled::Go(_)));
     assert!(backend.log().writes.is_empty());
     s.handle(T0, events(1, vec![wheel(1)]));
     assert_eq!(backend.log().writes, [(1, vec![wheel(1)])]);
