@@ -8,7 +8,7 @@
 
 use crate::identity::{ActiveUid, Caller};
 use crate::policy::authorise;
-use std::collections::HashMap;
+use crate::tally::Tally;
 use std::sync::{Arc, Mutex, PoisonError};
 use turnstile_wire::limits::{
     HANDSHAKE_TIMEOUT_MS, MAX_CONNECTIONS, MAX_CONNECTIONS_PER_USER, MAX_RESERVED_PER_CLIENT,
@@ -53,10 +53,8 @@ pub struct NoSlot;
 
 #[derive(Debug, Default)]
 struct Counts {
-    reserved: HashMap<Maker, usize>,
-    per_user: HashMap<u32, usize>,
-    strangers: usize,
-    total: usize,
+    reserved: Tally<Maker>,
+    strangers: Tally<u32>,
 }
 
 /// The live connections, by pool. Cloning shares the counts.
@@ -74,22 +72,20 @@ impl Slots {
         let mut counts = self.counts();
         match bucket {
             Bucket::Reserved(client) => {
-                let held = counts.reserved.entry(client).or_default();
-                if *held >= MAX_RESERVED_PER_CLIENT {
+                if counts.reserved.count(client) >= MAX_RESERVED_PER_CLIENT {
                     return Err(NoSlot);
                 }
-                *held += 1;
+                counts.reserved.add(client);
             }
             Bucket::Stranger(uid) => {
-                let mine = counts.per_user.get(&uid).copied().unwrap_or(0);
-                if mine >= MAX_CONNECTIONS_PER_USER || counts.strangers >= MAX_CONNECTIONS {
+                if counts.strangers.count(uid) >= MAX_CONNECTIONS_PER_USER
+                    || counts.strangers.total() >= MAX_CONNECTIONS
+                {
                     return Err(NoSlot);
                 }
-                counts.per_user.insert(uid, mine + 1);
-                counts.strangers += 1;
+                counts.strangers.add(uid);
             }
         }
-        counts.total += 1;
         drop(counts);
         Ok(Slot {
             slots: self.clone(),
@@ -99,7 +95,8 @@ impl Slots {
 
     /// Connections held now, in every pool.
     pub fn open(&self) -> usize {
-        self.counts().total
+        let counts = self.counts();
+        counts.reserved.total() + counts.strangers.total()
     }
 
     fn counts(&self) -> std::sync::MutexGuard<'_, Counts> {
@@ -109,27 +106,9 @@ impl Slots {
     fn release(&self, bucket: Bucket) {
         let mut counts = self.counts();
         match bucket {
-            Bucket::Reserved(client) => {
-                if let Some(held) = counts.reserved.get_mut(&client) {
-                    *held = held.saturating_sub(1);
-                }
-            }
-            Bucket::Stranger(uid) => {
-                let left = counts
-                    .per_user
-                    .get(&uid)
-                    .copied()
-                    .unwrap_or(0)
-                    .saturating_sub(1);
-                if left == 0 {
-                    counts.per_user.remove(&uid);
-                } else {
-                    counts.per_user.insert(uid, left);
-                }
-                counts.strangers = counts.strangers.saturating_sub(1);
-            }
+            Bucket::Reserved(client) => counts.reserved.sub(client),
+            Bucket::Stranger(uid) => counts.strangers.sub(uid),
         }
-        counts.total = counts.total.saturating_sub(1);
     }
 }
 

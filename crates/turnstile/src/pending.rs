@@ -10,7 +10,7 @@
 //! share of these caps, and nothing of the accept loop. The caps are sized so the threads they
 //! allow plus the slots' fit the unit's `TasksMax=` (checked at compile time in the limits).
 
-use std::collections::HashMap;
+use crate::tally::Tally;
 use std::sync::{Arc, Mutex, PoisonError};
 use turnstile_wire::limits::{MAX_PENDING_IDENTIFICATIONS, MAX_PENDING_PER_USER};
 
@@ -44,10 +44,7 @@ pub enum Crowded {
 }
 
 #[derive(Debug, Default)]
-struct Counts {
-    per_user: HashMap<u32, usize>,
-    total: usize,
-}
+struct Counts(Tally<u32>);
 
 /// The identifications waiting now. Cloning shares the counts.
 #[derive(Debug, Clone)]
@@ -68,15 +65,13 @@ impl Pending {
     /// A place for one identification of a connection from `uid`, held until the ticket drops.
     pub fn enter(&self, uid: u32) -> Result<Ticket, Crowded> {
         let mut counts = self.counts();
-        let mine = counts.per_user.get(&uid).copied().unwrap_or(0);
-        if mine >= self.caps.per_user {
+        if counts.0.count(uid) >= self.caps.per_user {
             return Err(Crowded::User);
         }
-        if counts.total >= self.caps.total {
+        if counts.0.total() >= self.caps.total {
             return Err(Crowded::All);
         }
-        counts.per_user.insert(uid, mine + 1);
-        counts.total += 1;
+        counts.0.add(uid);
         drop(counts);
         Ok(Ticket {
             pending: self.clone(),
@@ -86,7 +81,7 @@ impl Pending {
 
     /// Identifications waiting now, from every user.
     pub fn count(&self) -> usize {
-        self.counts().total
+        self.counts().0.total()
     }
 
     fn counts(&self) -> std::sync::MutexGuard<'_, Counts> {
@@ -94,19 +89,7 @@ impl Pending {
     }
 
     fn release(&self, uid: u32) {
-        let mut counts = self.counts();
-        let left = counts
-            .per_user
-            .get(&uid)
-            .copied()
-            .unwrap_or(0)
-            .saturating_sub(1);
-        if left == 0 {
-            counts.per_user.remove(&uid);
-        } else {
-            counts.per_user.insert(uid, left);
-        }
-        counts.total = counts.total.saturating_sub(1);
+        self.counts().0.sub(uid);
     }
 }
 
