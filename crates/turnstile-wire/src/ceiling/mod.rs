@@ -49,12 +49,13 @@ pub enum BadCaps {
 
 /// Cuts `create` to the ceiling of its kind.
 pub fn plan(create: &Create) -> Result<Plan, BadCaps> {
+    let maker = create.kind.maker();
     match (create.kind, &create.detail) {
-        (Kind::PalmrestTouchpad, Detail::None) => Ok(touchpad::plan()),
-        (Kind::PalmrestWheel, Detail::None) => Ok(wheel::plan()),
-        (Kind::PalmrestKeys, Detail::Keys(codes)) => keys::plan(codes),
-        (Kind::KeycapKeyboard, Detail::None) => Ok(keycap::keyboard()),
-        (Kind::KeycapPointer, Detail::Pointer(caps)) => keycap::pointer(caps),
+        (Kind::PalmrestTouchpad, Detail::None) => Ok(touchpad::plan(maker)),
+        (Kind::PalmrestWheel, Detail::None) => Ok(wheel::plan(maker)),
+        (Kind::PalmrestKeys, Detail::Keys(codes)) => keys::plan(maker, codes),
+        (Kind::KeycapKeyboard, Detail::None) => Ok(keycap::keyboard(maker)),
+        (Kind::KeycapPointer, Detail::Pointer(caps)) => keycap::pointer(maker, caps),
         (_, _) => Err(BadCaps::Detail),
     }
 }

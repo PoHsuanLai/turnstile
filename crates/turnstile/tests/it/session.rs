@@ -307,6 +307,6 @@ fn every_device_kind_is_made_with_the_label_of_the_caller_it_is_for() {
         assert!(created(&made).is_some(), "{kind:?}");
         let label = backend.log().specs[0].maker.to_string();
         assert_eq!(label, format!("turnstile/{}", role.as_str()), "{kind:?}");
-        assert_eq!(Maker::parse(&label), Some(Maker::of(kind)), "{kind:?}");
+        assert_eq!(Maker::parse(&label), Some(kind.maker()), "{kind:?}");
     }
 }

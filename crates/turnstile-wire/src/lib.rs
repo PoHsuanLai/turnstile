@@ -23,7 +23,7 @@ pub mod spec;
 pub use ceiling::{BadCaps, Denial, Filter, Filtered, Plan, Verdict, plan};
 pub use codec::{WireError, decode_reply, decode_request, encode_reply, encode_request};
 pub use event::Event;
-pub use kind::{Delivery, Kind, Owner};
+pub use kind::{Delivery, Kind};
 pub use limiter::{Admit, Limiter, Millis};
 pub use maker::Maker;
 pub use message::{Create, Detail, DeviceId, PointerCaps, Reason, Reply, Request};

@@ -10,26 +10,17 @@ use crate::identity::{ActiveUid, Caller};
 use crate::policy::authorise;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
-use turnstile_wire::Kind;
 use turnstile_wire::limits::{
     HANDSHAKE_TIMEOUT_MS, MAX_CONNECTIONS, MAX_CONNECTIONS_PER_USER, MAX_RESERVED_PER_CLIENT,
     STRANGER_HANDSHAKE_TIMEOUT_MS,
 };
-
-/// One of the two programs the service exists for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Client {
-    /// The touchpad daemon.
-    Palmrest,
-    /// The keymap daemon.
-    Keycap,
-}
+use turnstile_wire::{Kind, Maker};
 
 /// Which pool of slots a connection counts against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Bucket {
     /// A caller that passes the policy for one client's devices.
-    Reserved(Client),
+    Reserved(Maker),
     /// Anyone else, by the user the kernel names.
     Stranger(u32),
 }
@@ -38,9 +29,9 @@ impl Bucket {
     /// The pool for `caller` while `seat`'s user is active.
     pub fn of(caller: &Caller, seat: ActiveUid) -> Self {
         if authorise(Kind::PalmrestWheel, caller, seat).is_ok() {
-            Self::Reserved(Client::Palmrest)
+            Self::Reserved(Maker::PadDaemon)
         } else if authorise(Kind::KeycapKeyboard, caller, seat).is_ok() {
-            Self::Reserved(Client::Keycap)
+            Self::Reserved(Maker::KeymapDaemon)
         } else {
             Self::Stranger(caller.uid)
         }
@@ -62,7 +53,7 @@ pub struct NoSlot;
 
 #[derive(Debug, Default)]
 struct Counts {
-    reserved: HashMap<Client, usize>,
+    reserved: HashMap<Maker, usize>,
     per_user: HashMap<u32, usize>,
     strangers: usize,
     total: usize,

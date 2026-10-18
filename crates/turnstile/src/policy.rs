@@ -16,7 +16,7 @@
 
 use crate::identity::{ActiveUid, Caller, Credential, SeatSource, Strength};
 use peephole_core::roles::{KEYMAP_DAEMON, PAD_DAEMON};
-use turnstile_wire::{Kind, Owner};
+use turnstile_wire::{Kind, Maker};
 
 /// palmrest's control group, which only a system service can have.
 pub const PAD_CGROUP: &str = "/system.slice/palmrest.service";
@@ -87,9 +87,9 @@ impl Admission for AllowKinds {
 
 /// Whether `caller` may have a device of `kind` while `seat`'s user is active.
 pub fn authorise(kind: Kind, caller: &Caller, seat: ActiveUid) -> Result<(), Refusal> {
-    let (role, cgroup) = match kind.owner() {
-        Owner::Palmrest => (PAD_DAEMON, PAD_CGROUP),
-        Owner::Keycap => (KEYMAP_DAEMON, KEYMAP_CGROUP),
+    let (role, cgroup) = match kind.maker() {
+        Maker::PadDaemon => (PAD_DAEMON, PAD_CGROUP),
+        Maker::KeymapDaemon => (KEYMAP_DAEMON, KEYMAP_CGROUP),
         _ => return Err(Refusal::UnknownKind),
     };
     match &caller.credential {

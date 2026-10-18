@@ -32,13 +32,13 @@ const KEYS: [u16; 6] = [
     BTN_TOOL_QUADTAP,
 ];
 
-pub(super) fn plan() -> Plan {
+pub(super) fn plan(maker: Maker) -> Plan {
     let x = AbsAxis::range(ABS_X, 0, X_MAX).with_resolution(UNITS_PER_MM);
     let y = AbsAxis::range(ABS_Y, 0, Y_MAX).with_resolution(UNITS_PER_MM);
     Plan {
         spec: DeviceSpec {
             name: "palmrest touchpad".to_owned(),
-            maker: Maker::PadDaemon,
+            maker,
             vendor: 0x0001,
             product: 0x0002,
             keys: KEYS.to_vec(),

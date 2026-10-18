@@ -16,7 +16,7 @@ use crate::spec::DeviceSpec;
 /// The modifiers that turn a key press into a shortcut. Shift alone does not.
 const CHORD_MODIFIERS: [u16; 3] = [KEY_LEFTCTRL, KEY_LEFTALT, KEY_LEFTMETA];
 
-pub(super) fn plan(requested: &[u16]) -> Result<Plan, BadCaps> {
+pub(super) fn plan(maker: Maker, requested: &[u16]) -> Result<Plan, BadCaps> {
     if requested.is_empty() {
         return Err(BadCaps::NoKeys);
     }
@@ -32,7 +32,7 @@ pub(super) fn plan(requested: &[u16]) -> Result<Plan, BadCaps> {
     Ok(Plan {
         spec: DeviceSpec {
             name: "palmrest keys".to_owned(),
-            maker: Maker::PadDaemon,
+            maker,
             vendor: 0x0001,
             product: 0x0003,
             keys: keys.clone(),

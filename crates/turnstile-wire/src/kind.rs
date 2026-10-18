@@ -1,6 +1,8 @@
 //! The five kinds of device turnstile will make, and nothing else. Everything about a kind that is
 //! a fact (its code, who may ask, how events reach the kernel) lives here.
 
+use crate::maker::Maker;
+
 /// How events reach the kernel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -28,16 +30,6 @@ impl Delivery {
             _ => None,
         }
     }
-}
-
-/// Which program a kind belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum Owner {
-    /// The Magic Mouse gesture daemon.
-    Palmrest,
-    /// The Mac keyboard mapping daemon.
-    Keycap,
 }
 
 /// A kind of device the service will make.
@@ -97,11 +89,11 @@ impl Kind {
         }
     }
 
-    /// The only program that may ask for this kind.
-    pub const fn owner(self) -> Owner {
+    /// The only service that may ask for this kind, and the one every device of it is made for.
+    pub const fn maker(self) -> Maker {
         match self {
-            Self::PalmrestTouchpad | Self::PalmrestWheel | Self::PalmrestKeys => Owner::Palmrest,
-            Self::KeycapKeyboard | Self::KeycapPointer => Owner::Keycap,
+            Self::PalmrestTouchpad | Self::PalmrestWheel | Self::PalmrestKeys => Maker::PadDaemon,
+            Self::KeycapKeyboard | Self::KeycapPointer => Maker::KeymapDaemon,
         }
     }
 

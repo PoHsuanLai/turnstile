@@ -9,7 +9,6 @@
 //! casement keeps its own copy of [`Maker::parse`] (it links nothing of turnstile); each repository
 //! pins the exact strings in a test, so a change here fails both.
 
-use crate::kind::{Kind, Owner};
 use std::fmt;
 
 /// What comes before the role in a label.
@@ -26,14 +25,6 @@ pub enum Maker {
 }
 
 impl Maker {
-    /// The service every device of `kind` is made for.
-    pub const fn of(kind: Kind) -> Self {
-        match kind.owner() {
-            Owner::Palmrest => Self::PadDaemon,
-            Owner::Keycap => Self::KeymapDaemon,
-        }
-    }
-
     /// The peephole role name.
     pub const fn role(self) -> &'static str {
         match self {

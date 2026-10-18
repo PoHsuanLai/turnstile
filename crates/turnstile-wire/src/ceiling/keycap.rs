@@ -32,11 +32,11 @@ const fn is_button(code: u16) -> bool {
     matches!(code, 0x100..=0x15f | 0x2c0..=0x2ff)
 }
 
-pub(super) fn keyboard() -> Plan {
+pub(super) fn keyboard(maker: Maker) -> Plan {
     Plan {
         spec: DeviceSpec {
             name: KEYBOARD_NAME.to_owned(),
-            maker: Maker::KeymapDaemon,
+            maker,
             vendor: VENDOR,
             product: 0x0001,
             keys: (1..=KEY_MAX).collect(),
@@ -56,7 +56,7 @@ pub(super) fn keyboard() -> Plan {
     }
 }
 
-pub(super) fn pointer(caps: &PointerCaps) -> Result<Plan, BadCaps> {
+pub(super) fn pointer(maker: Maker, caps: &PointerCaps) -> Result<Plan, BadCaps> {
     let buttons = sorted(caps.buttons.iter().copied().filter(|&c| is_button(c)));
     let rels = sorted(caps.rels.iter().copied().filter(|&c| c <= REL_MAX));
     let props = sorted(caps.props.iter().copied().filter(|&p| p <= PROP_MAX));
@@ -67,7 +67,7 @@ pub(super) fn pointer(caps: &PointerCaps) -> Result<Plan, BadCaps> {
     Ok(Plan {
         spec: DeviceSpec {
             name: pointer_name(&caps.label),
-            maker: Maker::KeymapDaemon,
+            maker,
             vendor: caps.vendor,
             product: caps.product,
             keys: buttons,

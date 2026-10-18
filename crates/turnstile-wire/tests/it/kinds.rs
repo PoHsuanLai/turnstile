@@ -1,24 +1,34 @@
-use turnstile_wire::{Delivery, Kind, Owner};
+use turnstile_wire::{Delivery, Kind, Maker};
 
 #[test]
-fn every_kind_round_trips_its_code_and_has_one_owner_and_delivery() {
-    const WANT: &[(Kind, u8, Owner, Delivery)] = &[
+fn every_kind_round_trips_its_code_and_has_one_maker_and_delivery() {
+    const WANT: &[(Kind, u8, Maker, Delivery)] = &[
         (
             Kind::PalmrestTouchpad,
             1,
-            Owner::Palmrest,
+            Maker::PadDaemon,
             Delivery::Proxied,
         ),
-        (Kind::PalmrestWheel, 2, Owner::Palmrest, Delivery::Proxied),
-        (Kind::PalmrestKeys, 3, Owner::Palmrest, Delivery::Proxied),
-        (Kind::KeycapKeyboard, 16, Owner::Keycap, Delivery::Handed),
-        (Kind::KeycapPointer, 17, Owner::Keycap, Delivery::Handed),
+        (Kind::PalmrestWheel, 2, Maker::PadDaemon, Delivery::Proxied),
+        (Kind::PalmrestKeys, 3, Maker::PadDaemon, Delivery::Proxied),
+        (
+            Kind::KeycapKeyboard,
+            16,
+            Maker::KeymapDaemon,
+            Delivery::Handed,
+        ),
+        (
+            Kind::KeycapPointer,
+            17,
+            Maker::KeymapDaemon,
+            Delivery::Handed,
+        ),
     ];
     assert_eq!(WANT.len(), Kind::ALL.len());
-    for &(kind, code, owner, delivery) in WANT {
+    for &(kind, code, maker, delivery) in WANT {
         assert_eq!(kind.code(), code, "{kind:?}");
         assert_eq!(Kind::from_code(code), Some(kind));
-        assert_eq!(kind.owner(), owner, "{kind:?}");
+        assert_eq!(kind.maker(), maker, "{kind:?}");
         assert_eq!(kind.delivery(), delivery, "{kind:?}");
     }
 }

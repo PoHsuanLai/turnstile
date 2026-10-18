@@ -13,11 +13,11 @@ use crate::spec::DeviceSpec;
 /// The relative axes the wheel has.
 pub(super) const AXES: [u16; 4] = [REL_WHEEL, REL_HWHEEL, REL_WHEEL_HI_RES, REL_HWHEEL_HI_RES];
 
-pub(super) fn plan() -> Plan {
+pub(super) fn plan(maker: Maker) -> Plan {
     Plan {
         spec: DeviceSpec {
             name: "palmrest wheel".to_owned(),
-            maker: Maker::PadDaemon,
+            maker,
             vendor: 0x0001,
             product: 0x0001,
             keys: Vec::new(),

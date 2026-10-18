@@ -58,11 +58,11 @@ fn any_other_text_is_no_maker() {
 fn every_kind_is_labelled_with_the_service_it_is_made_for() {
     for kind in Kind::ALL {
         let spec = plan(&create_of(kind)).expect("plans").spec;
-        assert_eq!(spec.maker, Maker::of(kind), "{kind:?}");
+        assert_eq!(spec.maker, kind.maker(), "{kind:?}");
     }
-    assert_eq!(Maker::of(Kind::PalmrestTouchpad), Maker::PadDaemon);
-    assert_eq!(Maker::of(Kind::PalmrestWheel), Maker::PadDaemon);
-    assert_eq!(Maker::of(Kind::PalmrestKeys), Maker::PadDaemon);
-    assert_eq!(Maker::of(Kind::KeycapKeyboard), Maker::KeymapDaemon);
-    assert_eq!(Maker::of(Kind::KeycapPointer), Maker::KeymapDaemon);
+    assert_eq!(Kind::PalmrestTouchpad.maker(), Maker::PadDaemon);
+    assert_eq!(Kind::PalmrestWheel.maker(), Maker::PadDaemon);
+    assert_eq!(Kind::PalmrestKeys.maker(), Maker::PadDaemon);
+    assert_eq!(Kind::KeycapKeyboard.maker(), Maker::KeymapDaemon);
+    assert_eq!(Kind::KeycapPointer.maker(), Maker::KeymapDaemon);
 }

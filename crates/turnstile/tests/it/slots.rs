@@ -1,6 +1,7 @@
 use crate::support::{KEYCAP_UID, PALMREST_UID, USER, keycap, palmrest};
 use turnstile::identity::{ActiveUid, Caller, Credential};
-use turnstile::slots::{Bucket, Client, NoSlot, Slots};
+use turnstile::slots::{Bucket, NoSlot, Slots};
+use turnstile_wire::Maker;
 use turnstile_wire::limits::{MAX_CONNECTIONS, MAX_CONNECTIONS_PER_USER, MAX_RESERVED_PER_CLIENT};
 
 fn seat() -> ActiveUid {
@@ -18,8 +19,8 @@ fn stranger(uid: u32) -> Caller {
 #[test]
 fn a_caller_that_passes_the_policy_has_a_reserve_and_anyone_else_a_user_pool() {
     let table: &[(&str, Caller, Bucket)] = &[
-        ("palmrest", palmrest(), Bucket::Reserved(Client::Palmrest)),
-        ("keycap", keycap(), Bucket::Reserved(Client::Keycap)),
+        ("palmrest", palmrest(), Bucket::Reserved(Maker::PadDaemon)),
+        ("keycap", keycap(), Bucket::Reserved(Maker::KeymapDaemon)),
         (
             "a stranger at the seat",
             stranger(USER),
@@ -71,7 +72,7 @@ fn one_user_cannot_take_another_users_slots_or_the_reserve() {
         .take(Bucket::Stranger(2))
         .expect("another user's slot");
     let pad = slots
-        .take(Bucket::Reserved(Client::Palmrest))
+        .take(Bucket::Reserved(Maker::PadDaemon))
         .expect("reserve");
     assert_eq!(slots.open(), MAX_CONNECTIONS_PER_USER + 2);
     drop(mine);
@@ -94,7 +95,7 @@ fn many_users_share_the_stranger_total_but_never_the_reserve() {
         })
         .collect();
     assert_eq!(slots.take(Bucket::Stranger(9999)).err(), Some(NoSlot));
-    for client in [Client::Palmrest, Client::Keycap] {
+    for client in [Maker::PadDaemon, Maker::KeymapDaemon] {
         let reserve: Vec<_> = (0..MAX_RESERVED_PER_CLIENT)
             .map(|_| slots.take(Bucket::Reserved(client)).expect("reserve"))
             .collect();
