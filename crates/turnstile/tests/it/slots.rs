@@ -1,4 +1,5 @@
 use crate::support::{KEYCAP_UID, PALMREST_UID, USER, keycap, palmrest};
+use peephole_core::Uid;
 use turnstile::identity::{ActiveUid, Caller, Credential};
 use turnstile::slots::{Bucket, NoSlot, Slots};
 use turnstile_wire::Maker;
@@ -8,7 +9,7 @@ fn seat() -> ActiveUid {
     ActiveUid(Some(USER))
 }
 
-fn stranger(uid: u32) -> Caller {
+fn stranger(uid: Uid) -> Caller {
     Caller {
         uid,
         credential: Credential::Unlisted,
@@ -28,8 +29,8 @@ fn a_caller_that_passes_the_policy_has_a_reserve_and_anyone_else_a_user_pool() {
         ),
         (
             "a stranger elsewhere",
-            stranger(2000),
-            Bucket::Stranger(2000),
+            stranger(Uid::new(2000)),
+            Bucket::Stranger(Uid::new(2000)),
         ),
         (
             "palmrest's user is not a free pass",
@@ -65,11 +66,14 @@ fn a_caller_that_passes_the_policy_has_a_reserve_and_anyone_else_a_user_pool() {
 fn one_user_cannot_take_another_users_slots_or_the_reserve() {
     let slots = Slots::new();
     let mine: Vec<_> = (0..MAX_CONNECTIONS_PER_USER)
-        .map(|_| slots.take(Bucket::Stranger(1)).expect("a slot"))
+        .map(|_| slots.take(Bucket::Stranger(Uid::new(1))).expect("a slot"))
         .collect();
-    assert_eq!(slots.take(Bucket::Stranger(1)).err(), Some(NoSlot));
+    assert_eq!(
+        slots.take(Bucket::Stranger(Uid::new(1))).err(),
+        Some(NoSlot)
+    );
     let theirs = slots
-        .take(Bucket::Stranger(2))
+        .take(Bucket::Stranger(Uid::new(2)))
         .expect("another user's slot");
     let pad = slots
         .take(Bucket::Reserved(Maker::PadDaemon))
@@ -78,7 +82,7 @@ fn one_user_cannot_take_another_users_slots_or_the_reserve() {
     drop(mine);
     assert_eq!(slots.open(), 2);
     assert!(
-        slots.take(Bucket::Stranger(1)).is_ok(),
+        slots.take(Bucket::Stranger(Uid::new(1))).is_ok(),
         "a dropped slot is free again"
     );
     drop((theirs, pad));
@@ -90,11 +94,16 @@ fn many_users_share_the_stranger_total_but_never_the_reserve() {
     let held: Vec<_> = (0..MAX_CONNECTIONS)
         .map(|uid| {
             slots
-                .take(Bucket::Stranger(u32::try_from(uid).expect("small")))
+                .take(Bucket::Stranger(Uid::new(
+                    u32::try_from(uid).expect("small"),
+                )))
                 .expect("a slot")
         })
         .collect();
-    assert_eq!(slots.take(Bucket::Stranger(9999)).err(), Some(NoSlot));
+    assert_eq!(
+        slots.take(Bucket::Stranger(Uid::new(9999))).err(),
+        Some(NoSlot)
+    );
     for client in [Maker::PadDaemon, Maker::KeymapDaemon] {
         let reserve: Vec<_> = (0..MAX_RESERVED_PER_CLIENT)
             .map(|_| slots.take(Bucket::Reserved(client)).expect("reserve"))

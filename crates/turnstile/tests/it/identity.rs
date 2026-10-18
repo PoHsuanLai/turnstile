@@ -1,3 +1,4 @@
+use peephole_core::{CgroupPath, Pid, Uid};
 use turnstile::identity::seat::{SeatFile, SeatSource, parse_active_uid};
 use turnstile::identity::{ActiveUid, Caller, Credential};
 
@@ -21,7 +22,11 @@ fn the_active_user_is_the_active_uid_line() {
         ),
     ];
     for (name, text, want) in table {
-        assert_eq!(parse_active_uid(text), ActiveUid(*want), "{name}");
+        assert_eq!(
+            parse_active_uid(text),
+            ActiveUid((*want).map(Uid::new)),
+            "{name}"
+        );
     }
 }
 
@@ -32,17 +37,17 @@ fn the_seat_file_is_read_each_time_and_a_missing_one_means_no_one() {
     let seat = SeatFile::at(&path);
     assert_eq!(seat.active_uid(), ActiveUid(None));
     std::fs::write(&path, "ACTIVE_UID=1000\n").expect("write");
-    assert_eq!(seat.active_uid(), ActiveUid(Some(1000)));
+    assert_eq!(seat.active_uid(), ActiveUid(Some(Uid::new(1000))));
     std::fs::write(&path, "ACTIVE_UID=1001\n").expect("write");
-    assert_eq!(seat.active_uid(), ActiveUid(Some(1001)));
+    assert_eq!(seat.active_uid(), ActiveUid(Some(Uid::new(1001))));
 }
 
 #[test]
 fn a_caller_is_described_for_the_log_without_trusting_it() {
     let caller = Caller {
-        pid: 7,
-        uid: 1000,
-        cgroup: String::new(),
+        pid: Pid::new(7).expect("a process number"),
+        uid: Uid::new(1000),
+        cgroup: CgroupPath::new("/").expect("a cgroup path"),
         image: None,
         credential: Credential::Unlisted,
     };

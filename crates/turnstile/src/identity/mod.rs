@@ -10,7 +10,7 @@ pub mod seat;
 pub mod unit_files;
 
 use peephole::{LoadError, PinError, ProbeError};
-use peephole_core::{Proof, RoleName};
+use peephole_core::{CgroupPath, ExePath, Pid, Proof, RoleName, Uid};
 use rustix::io::Errno;
 use rustix::net::sockopt::socket_peercred;
 use std::os::fd::OwnedFd;
@@ -34,13 +34,13 @@ pub enum Credential {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Caller {
     /// Process id, for the log.
-    pub pid: u32,
+    pub pid: Pid,
     /// The user the kernel vouches for.
-    pub uid: u32,
+    pub uid: Uid,
     /// Its control group path, for example `/system.slice/keycap.service`.
-    pub cgroup: String,
+    pub cgroup: CgroupPath,
     /// Its image, for the log (`None` when the kernel hides it).
-    pub image: Option<String>,
+    pub image: Option<ExePath>,
     /// What the table says.
     pub credential: Credential,
 }
@@ -52,7 +52,9 @@ impl Caller {
             "pid={} uid={} image={}",
             self.pid,
             self.uid,
-            self.image.as_deref().unwrap_or("?")
+            self.image
+                .as_ref()
+                .map_or_else(|| "?".to_owned(), ExePath::to_text)
         )
     }
 }
@@ -83,9 +85,9 @@ pub trait Authority: Send + Sync + 'static {
 
     /// The user the kernel names for the peer of `conn`, from the socket alone: no `/proc` read, so
     /// it cannot wait on the peer. The daemon counts a connection by this before it identifies it.
-    fn peer_uid(&self, conn: &OwnedFd) -> Result<u32, IdentifyError> {
+    fn peer_uid(&self, conn: &OwnedFd) -> Result<Uid, IdentifyError> {
         socket_peercred(conn)
-            .map(|cred| cred.uid.as_raw())
+            .map(|cred| Uid::new(cred.uid.as_raw()))
             .map_err(IdentifyError::Peer)
     }
 }

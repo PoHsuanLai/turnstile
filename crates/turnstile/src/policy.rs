@@ -108,7 +108,7 @@ pub fn authorise(kind: Kind, caller: &Caller, seat: ActiveUid) -> Result<(), Ref
     if seat.0 == Some(caller.uid) {
         return Err(Refusal::WrongUser);
     }
-    if caller.cgroup != cgroup {
+    if caller.cgroup.as_str() != cgroup {
         return Err(Refusal::WrongPlace);
     }
     Ok(())

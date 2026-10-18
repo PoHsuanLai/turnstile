@@ -9,6 +9,7 @@
 use crate::identity::{ActiveUid, Caller};
 use crate::policy::authorise;
 use crate::tally::Tally;
+use peephole_core::Uid;
 use std::sync::{Arc, Mutex, PoisonError};
 use turnstile_wire::limits::{
     HANDSHAKE_TIMEOUT_MS, MAX_CONNECTIONS, MAX_CONNECTIONS_PER_USER, MAX_RESERVED_PER_CLIENT,
@@ -22,7 +23,7 @@ pub enum Bucket {
     /// A caller that passes the policy for one client's devices.
     Reserved(Maker),
     /// Anyone else, by the user the kernel names.
-    Stranger(u32),
+    Stranger(Uid),
 }
 
 impl Bucket {
@@ -54,7 +55,7 @@ pub struct NoSlot;
 #[derive(Debug, Default)]
 struct Counts {
     reserved: Tally<Maker>,
-    strangers: Tally<u32>,
+    strangers: Tally<Uid>,
 }
 
 /// The live connections, by pool. Cloning shares the counts.

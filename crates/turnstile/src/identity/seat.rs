@@ -1,5 +1,6 @@
 //! Who is logged in on the seat: the `ACTIVE_UID` line of logind's file, the same fact keycap reads.
 
+use peephole_core::Uid;
 use std::io::Read;
 use std::path::PathBuf;
 
@@ -10,7 +11,7 @@ const MAX_SEAT_BYTES: u64 = 4096;
 
 /// The user of the active session, if there is one (there is none before anyone logs in).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ActiveUid(pub Option<u32>);
+pub struct ActiveUid(pub Option<Uid>);
 
 /// Where the active user comes from.
 pub trait SeatSource: Send + Sync + 'static {
@@ -53,7 +54,8 @@ pub fn parse_active_uid(text: &str) -> ActiveUid {
     ActiveUid(
         text.lines()
             .find_map(|line| line.strip_prefix("ACTIVE_UID="))
-            .and_then(|value| value.trim().parse().ok()),
+            .and_then(|value| value.trim().parse().ok())
+            .map(Uid::new),
     )
 }
 

@@ -1,5 +1,5 @@
 use crate::support::{KEYCAP_UID, PALMREST_CGROUP, PALMREST_UID, USER, keycap, listed, palmrest};
-use peephole_core::Proof;
+use peephole_core::{Proof, Uid};
 use turnstile::identity::{ActiveUid, Caller, Credential};
 use turnstile::policy::{Refusal, authorise};
 use turnstile_wire::Kind;
@@ -11,7 +11,7 @@ const PALMREST_KINDS: [Kind; 3] = [
 ];
 const KEYCAP_KINDS: [Kind; 2] = [Kind::KeycapKeyboard, Kind::KeycapPointer];
 
-fn seat(uid: Option<u32>) -> ActiveUid {
+fn seat(uid: Option<Uid>) -> ActiveUid {
     ActiveUid(uid)
 }
 

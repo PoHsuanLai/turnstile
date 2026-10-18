@@ -1,6 +1,7 @@
 //! The accept loop on a real socket in a scratch folder.
 
 use crate::support::{USER, listed, palmrest};
+use peephole_core::Uid;
 use rustix::net::{
     AddressFamily, SocketAddrUnix, SocketFlags, SocketType, bind, listen, socket_with,
 };
@@ -77,7 +78,7 @@ impl<A: Authority> InOrder<A> {
 }
 
 impl<A: Authority> Authority for InOrder<A> {
-    fn peer_uid(&self, conn: &OwnedFd) -> Result<u32, IdentifyError> {
+    fn peer_uid(&self, conn: &OwnedFd) -> Result<Uid, IdentifyError> {
         let uid = self.inner.peer_uid(conn)?;
         let mut turn = self.turn.lock().expect("lock");
         let number = turn.accepted;
@@ -119,7 +120,7 @@ struct Scripted {
     next: Mutex<VecDeque<Caller>>,
     rest: Caller,
     by_fd: Mutex<HashMap<RawFd, Caller>>,
-    hung: Option<(u32, Mutex<mpsc::Receiver<()>>)>,
+    hung: Option<(Uid, Mutex<mpsc::Receiver<()>>)>,
 }
 
 impl Scripted {
@@ -133,7 +134,7 @@ impl Scripted {
     }
 
     /// Identification of peers of `uid` blocks until the returned sender is dropped.
-    fn hanging(mut self, uid: u32) -> (Self, mpsc::Sender<()>) {
+    fn hanging(mut self, uid: Uid) -> (Self, mpsc::Sender<()>) {
         let (gate, wait) = mpsc::channel();
         self.hung = Some((uid, Mutex::new(wait)));
         (self, gate)
@@ -141,7 +142,7 @@ impl Scripted {
 }
 
 impl Authority for Scripted {
-    fn peer_uid(&self, conn: &OwnedFd) -> Result<u32, IdentifyError> {
+    fn peer_uid(&self, conn: &OwnedFd) -> Result<Uid, IdentifyError> {
         let caller = self
             .next
             .lock()
@@ -175,7 +176,7 @@ impl Authority for Scripted {
 }
 
 /// A user the service has never heard of, at the seat or not.
-fn stranger(uid: u32) -> Caller {
+fn stranger(uid: Uid) -> Caller {
     Caller {
         credential: Credential::Unlisted,
         ..listed("pad_daemon", peephole_core::Proof::Cgroup, uid, "/x")
@@ -249,8 +250,8 @@ fn a_connection_keeps_it_alive_and_its_end_lets_it_go() {
 #[test]
 fn a_flood_from_one_user_is_refused_after_its_own_slots_and_palmrest_still_gets_in() {
     let script: VecDeque<Caller> = (0..=MAX_CONNECTIONS_PER_USER)
-        .map(|_| stranger(2000))
-        .chain([stranger(2001)])
+        .map(|_| stranger(Uid::new(2000)))
+        .chain([stranger(Uid::new(2001))])
         .collect();
     let authority = Scripted::new(script, palmrest());
     let (_dir, broker, _finished, _kernel) = start_with(60_000, authority);
@@ -319,8 +320,8 @@ fn promptly<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
 /// NEW-FA-3: a peer whose identification never returns holds its own thread and nobody else's.
 #[test]
 fn a_stuck_identification_does_not_delay_palmrest() {
-    let script = VecDeque::from([stranger(3000)]);
-    let (authority, release) = Scripted::new(script, palmrest()).hanging(3000);
+    let script = VecDeque::from([stranger(Uid::new(3000))]);
+    let (authority, release) = Scripted::new(script, palmrest()).hanging(Uid::new(3000));
     let (_dir, broker, _finished, _kernel) = start_capped(60_000, authority, Caps::default());
     let _stuck = broker.open().expect("connects");
     let served = promptly(move || {
@@ -334,8 +335,10 @@ fn a_stuck_identification_does_not_delay_palmrest() {
 /// NEW-FA-3: one user's stuck identifications use up that user's share and no one else's.
 #[test]
 fn a_user_over_its_pending_share_is_closed_at_once_and_palmrest_still_gets_in() {
-    let script: VecDeque<Caller> = (0..=MAX_PENDING_PER_USER).map(|_| stranger(3000)).collect();
-    let (authority, release) = Scripted::new(script, palmrest()).hanging(3000);
+    let script: VecDeque<Caller> = (0..=MAX_PENDING_PER_USER)
+        .map(|_| stranger(Uid::new(3000)))
+        .collect();
+    let (authority, release) = Scripted::new(script, palmrest()).hanging(Uid::new(3000));
     let (_dir, broker, _finished, _kernel) = start_capped(60_000, authority, Caps::default());
     let _stuck: Vec<_> = (0..MAX_PENDING_PER_USER)
         .map(|_| broker.open().expect("connects"))

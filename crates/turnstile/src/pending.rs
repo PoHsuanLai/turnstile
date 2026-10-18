@@ -11,6 +11,7 @@
 //! allow plus the slots' fit the unit's `TasksMax=` (checked at compile time in the limits).
 
 use crate::tally::Tally;
+use peephole_core::Uid;
 use std::sync::{Arc, Mutex, PoisonError};
 use turnstile_wire::limits::{MAX_PENDING_IDENTIFICATIONS, MAX_PENDING_PER_USER};
 
@@ -44,7 +45,7 @@ pub enum Crowded {
 }
 
 #[derive(Debug, Default)]
-struct Counts(Tally<u32>);
+struct Counts(Tally<Uid>);
 
 /// The identifications waiting now. Cloning shares the counts.
 #[derive(Debug, Clone)]
@@ -63,7 +64,7 @@ impl Pending {
     }
 
     /// A place for one identification of a connection from `uid`, held until the ticket drops.
-    pub fn enter(&self, uid: u32) -> Result<Ticket, Crowded> {
+    pub fn enter(&self, uid: Uid) -> Result<Ticket, Crowded> {
         let mut counts = self.counts();
         if counts.0.count(uid) >= self.caps.per_user {
             return Err(Crowded::User);
@@ -88,7 +89,7 @@ impl Pending {
         self.counts.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn release(&self, uid: u32) {
+    fn release(&self, uid: Uid) {
         self.counts().0.sub(uid);
     }
 }
@@ -97,7 +98,7 @@ impl Pending {
 #[derive(Debug)]
 pub struct Ticket {
     pending: Pending,
-    uid: u32,
+    uid: Uid,
 }
 
 impl Drop for Ticket {

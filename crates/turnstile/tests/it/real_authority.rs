@@ -112,11 +112,14 @@ fn keycap_in_its_system_unit_with_a_root_owned_image_and_a_proven_unit_is_listed
     let caller = authority(keycap_world(), KEYCAP_CGROUP, image)
         .identify(&conn)
         .expect("identified");
-    assert_eq!(caller.cgroup, "/system.slice/keycap.service");
-    assert_eq!(caller.image.as_deref(), Some("/usr/local/bin/keycap"));
+    assert_eq!(caller.cgroup.as_str(), "/system.slice/keycap.service");
+    assert_eq!(
+        caller.image.map(|image| image.to_text()).as_deref(),
+        Some("/usr/local/bin/keycap")
+    );
     assert_eq!(
         caller.uid,
-        socket_peercred(&conn).expect("credentials").uid.as_raw()
+        Uid::new(socket_peercred(&conn).expect("credentials").uid.as_raw())
     );
     assert_eq!(
         caller.credential,

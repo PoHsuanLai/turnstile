@@ -1,6 +1,6 @@
 //! Callers, seats and contexts the tests share.
 
-use peephole_core::{Proof, RoleName};
+use peephole_core::{CgroupPath, ExePath, Pid, Proof, RoleName, Uid};
 use std::sync::Arc;
 use turnstile::backend::fake::FakeBackend;
 use turnstile::clock::ManualClock;
@@ -10,21 +10,21 @@ use turnstile::identity::{ActiveUid, Caller, Credential};
 use turnstile::serve::Context;
 
 /// The user at the seat.
-pub(crate) const USER: u32 = 1000;
+pub(crate) const USER: Uid = Uid::new(1000);
 /// keycap's dynamic user.
-pub(crate) const KEYCAP_UID: u32 = 61_234;
+pub(crate) const KEYCAP_UID: Uid = Uid::new(61_234);
 /// palmrest's dynamic user.
-pub(crate) const PALMREST_UID: u32 = 61_235;
+pub(crate) const PALMREST_UID: Uid = Uid::new(61_235);
 /// palmrest's control group: a system service's.
 pub(crate) const PALMREST_CGROUP: &str = "/system.slice/palmrest.service";
 
-pub(crate) fn listed(role: &str, proof: Proof, uid: u32, cgroup: &str) -> Caller {
+pub(crate) fn listed(role: &str, proof: Proof, uid: Uid, cgroup: &str) -> Caller {
     let role = RoleName::new(role).expect("a valid role name");
     Caller {
-        pid: 4242,
+        pid: Pid::new(4242).expect("a process number"),
         uid,
-        cgroup: cgroup.to_owned(),
-        image: Some("/usr/local/bin/x".to_owned()),
+        cgroup: CgroupPath::new(cgroup).expect("a cgroup path"),
+        image: Some(ExePath::new("/usr/local/bin/x").expect("an image path")),
         credential: Credential::Listed { role, proof },
     }
 }

@@ -51,11 +51,11 @@ impl<P: ProcFs + 'static> Authority for PeepholeAuthority<P> {
             .map_err(IdentifyError::Table)?;
         let (facts, standing) = self.prove_unit(&pinned, facts, &table);
         Ok(Caller {
-            pid: facts.pid.get(),
-            uid: facts.uid.get(),
-            cgroup: facts.cgroup.as_str().to_owned(),
-            image: match &facts.exe {
-                Exe::Read { path, .. } => Some(path.to_text()),
+            pid: facts.pid,
+            uid: facts.uid,
+            cgroup: facts.cgroup,
+            image: match facts.exe {
+                Exe::Read { path, .. } => Some(path),
                 _ => None,
             },
             credential: credential(&standing),
