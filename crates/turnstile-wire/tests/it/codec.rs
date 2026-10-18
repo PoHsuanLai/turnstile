@@ -2,8 +2,8 @@ use turnstile_wire::limits::{
     MAX_DATAGRAM, MAX_EVENTS_PER_DATAGRAM, MAX_FEEDBACK_EVENTS, MAX_KEY_CODES, PROTOCOL_VERSION,
 };
 use turnstile_wire::{
-    AbsAxis, Create, Delivery, Detail, DeviceId, Event, PointerCaps, Reason, Reply, Request,
-    WireError, decode_reply, decode_request, encode_reply, encode_request,
+    AbsAxis, Create, Delivery, DeviceId, Event, PointerCaps, Reason, Reply, Request, WireError,
+    decode_reply, decode_request, encode_reply, encode_request,
 };
 
 fn pointer() -> PointerCaps {
@@ -214,10 +214,6 @@ fn encoding_refuses_what_decoding_would() {
         Request::Create(Create::keys(vec![1; MAX_KEY_CODES + 1])),
         Request::Create(Create::pointer(long_label)),
         Request::Create(Create::pointer(too_many_buttons)),
-        Request::Create(Create {
-            kind: turnstile_wire::Kind::PalmrestWheel,
-            detail: Detail::Keys(vec![1]),
-        }),
         Request::Events {
             device: DeviceId(0),
             events: vec![],

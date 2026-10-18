@@ -7,20 +7,21 @@ use crate::limits::{
     MAX_KEY_CODES, MAX_LABEL_BYTES, MAX_POINTER_ABS, MAX_POINTER_BUTTONS, MAX_POINTER_PROPS,
     MAX_POINTER_RELS,
 };
-use crate::message::{Create, Detail, PointerCaps};
+use crate::message::{Create, PointerCaps};
 use crate::spec::AbsAxis;
 
 pub(super) fn read(r: &mut Reader<'_>) -> Result<Create, WireError> {
     let code = r.u8()?;
     let kind = Kind::from_code(code).ok_or(WireError::Kind(code))?;
-    let detail = match kind {
+    let create = match kind {
+        Kind::PalmrestTouchpad => Create::Touchpad,
+        Kind::PalmrestWheel => Create::Wheel,
         Kind::PalmrestKeys => {
-            Detail::Keys(r.counted("the key list", MAX_KEY_CODES, Reader::u16)?)
+            Create::Keys(r.counted("the key list", MAX_KEY_CODES, Reader::u16)?)
         }
-        Kind::KeycapPointer => Detail::Pointer(read_pointer(r)?),
-        _ => Detail::None,
+        Kind::KeycapKeyboard => Create::Keyboard,
+        Kind::KeycapPointer => Create::Pointer(read_pointer(r)?),
     };
-    let create = Create { kind, detail };
     validate(&create)?;
     Ok(create)
 }
@@ -55,16 +56,12 @@ fn read_axis(r: &mut Reader<'_>) -> Result<AbsAxis, WireError> {
     })
 }
 
-/// The detail must be the one the kind takes, within the caps and (for a label) plain text.
+/// What a kind carries must be within the caps and (for a label) plain text.
 pub(super) fn validate(create: &Create) -> Result<(), WireError> {
-    match (&create.kind, &create.detail) {
-        (Kind::PalmrestKeys, Detail::Keys(codes)) => {
-            check_len("the key list", codes.len(), MAX_KEY_CODES).map(drop)
-        }
-        (Kind::KeycapPointer, Detail::Pointer(caps)) => validate_pointer(caps),
-        (Kind::PalmrestKeys | Kind::KeycapPointer, _) => Err(WireError::Detail),
-        (_, Detail::None) => Ok(()),
-        (_, _) => Err(WireError::Detail),
+    match create {
+        Create::Keys(codes) => check_len("the key list", codes.len(), MAX_KEY_CODES).map(drop),
+        Create::Pointer(caps) => validate_pointer(caps),
+        Create::Touchpad | Create::Wheel | Create::Keyboard => Ok(()),
     }
 }
 
@@ -80,16 +77,16 @@ fn validate_pointer(caps: &PointerCaps) -> Result<(), WireError> {
 
 pub(super) fn write(create: &Create, out: &mut Vec<u8>) -> Result<(), WireError> {
     validate(create)?;
-    out.push(create.kind.code());
-    match &create.detail {
-        Detail::None => {}
-        Detail::Keys(codes) => {
+    out.push(create.kind().code());
+    match create {
+        Create::Touchpad | Create::Wheel | Create::Keyboard => {}
+        Create::Keys(codes) => {
             out.push(check_len("the key list", codes.len(), MAX_KEY_CODES)?);
             for c in codes {
                 out.extend_from_slice(&c.to_le_bytes());
             }
         }
-        Detail::Pointer(caps) => write_pointer(caps, out)?,
+        Create::Pointer(caps) => write_pointer(caps, out)?,
     }
     Ok(())
 }
@@ -99,13 +96,22 @@ fn write_pointer(caps: &PointerCaps, out: &mut Vec<u8>) -> Result<(), WireError>
     out.extend_from_slice(caps.label.as_bytes());
     out.extend_from_slice(&caps.vendor.to_le_bytes());
     out.extend_from_slice(&caps.product.to_le_bytes());
-    for list in [&caps.props, &caps.buttons, &caps.rels] {
-        out.push(u8::try_from(list.len()).map_err(|_| WireError::Detail)?);
+    let lists = [
+        ("the property list", &caps.props, MAX_POINTER_PROPS),
+        ("the button list", &caps.buttons, MAX_POINTER_BUTTONS),
+        ("the relative axis list", &caps.rels, MAX_POINTER_RELS),
+    ];
+    for (what, list, max) in lists {
+        out.push(check_len(what, list.len(), max)?);
         for c in list {
             out.extend_from_slice(&c.to_le_bytes());
         }
     }
-    out.push(u8::try_from(caps.abs.len()).map_err(|_| WireError::Detail)?);
+    out.push(check_len(
+        "the absolute axis list",
+        caps.abs.len(),
+        MAX_POINTER_ABS,
+    )?);
     for axis in &caps.abs {
         out.extend_from_slice(&axis.code.to_le_bytes());
         for v in [

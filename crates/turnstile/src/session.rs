@@ -166,11 +166,11 @@ impl<'a, B: Backend, A: Admission> Session<'a, B, A> {
     }
 
     fn create(&mut self, now: Millis, create: &Create) -> Handled {
-        let kind = Some(create.kind);
-        if let Err(why) = self.admission.admit(create.kind) {
+        let kind = Some(create.kind());
+        if let Err(why) = self.admission.admit(create.kind()) {
             return Handled::refuse(Reason::NotAllowed, kind, why);
         }
-        let delivery = create.kind.delivery();
+        let delivery = create.kind().delivery();
         let over = self.created >= MAX_CREATES_PER_CONNECTION
             || match delivery {
                 Delivery::Handed => self.handed >= MAX_HANDED_PER_CONNECTION,

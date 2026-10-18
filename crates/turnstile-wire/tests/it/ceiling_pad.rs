@@ -2,7 +2,7 @@
 
 use crate::{abs, key, rel, sync};
 use turnstile_wire::codes::*;
-use turnstile_wire::{BadCaps, Create, Denial, Event, Filter, Verdict, plan};
+use turnstile_wire::{Create, Denial, Event, Filter, Verdict, plan};
 
 fn filter(create: &Create) -> Filter {
     plan(create)
@@ -240,13 +240,4 @@ fn the_wheel_cannot_click_or_point() {
     );
     assert!(spec.keys.is_empty() && spec.abs.is_empty() && spec.props.is_empty());
     assert_eq!(spec.event_types(), [EV_REL]);
-}
-
-#[test]
-fn a_detail_on_a_kind_that_takes_none_is_refused() {
-    let wheel_with_keys = Create {
-        kind: turnstile_wire::Kind::PalmrestWheel,
-        detail: turnstile_wire::Detail::Keys(vec![30]),
-    };
-    assert!(matches!(plan(&wheel_with_keys), Err(BadCaps::Detail)));
 }

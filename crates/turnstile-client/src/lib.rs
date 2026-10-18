@@ -23,4 +23,4 @@ mod session;
 pub use broker::{Broker, Connection, DEFAULT_SOCKET};
 pub use error::ClientError;
 pub use session::{DeviceSource, Made, Sent, Session};
-pub use turnstile_wire::{AbsAxis, Create, Detail, DeviceId, Event, Kind, PointerCaps, Reason};
+pub use turnstile_wire::{AbsAxis, Create, DeviceId, Event, Kind, PointerCaps, Reason};

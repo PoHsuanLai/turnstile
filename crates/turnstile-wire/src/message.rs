@@ -28,64 +28,56 @@ pub struct PointerCaps {
     pub abs: Vec<AbsAxis>,
 }
 
-/// What a kind needs beyond its name.
+/// A request for one device. Each kind carries what it needs, so a pair that does not belong
+/// together cannot be built.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Detail {
-    /// Nothing: the kind's capabilities are constants.
-    None,
-    /// The key codes of palmrest's keyboard.
+pub enum Create {
+    /// palmrest's touchpad.
+    Touchpad,
+    /// palmrest's wheel.
+    Wheel,
+    /// palmrest's keyboard with these key codes.
     Keys(Vec<u16>),
-    /// The capabilities of a keycap pointer.
+    /// keycap's keyboard.
+    Keyboard,
+    /// keycap's pointer with these capabilities.
     Pointer(PointerCaps),
-}
-
-/// A request for one device.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Create {
-    /// Which device.
-    pub kind: Kind,
-    /// What the kind needs.
-    pub detail: Detail,
 }
 
 impl Create {
     /// palmrest's touchpad.
     pub const fn touchpad() -> Self {
-        Self {
-            kind: Kind::PalmrestTouchpad,
-            detail: Detail::None,
-        }
+        Self::Touchpad
     }
 
     /// palmrest's wheel.
     pub const fn wheel() -> Self {
-        Self {
-            kind: Kind::PalmrestWheel,
-            detail: Detail::None,
-        }
+        Self::Wheel
     }
 
     /// palmrest's keyboard with the keys `codes`.
     pub fn keys(codes: Vec<u16>) -> Self {
-        Self {
-            kind: Kind::PalmrestKeys,
-            detail: Detail::Keys(codes),
-        }
+        Self::Keys(codes)
     }
 
     /// keycap's keyboard.
     pub const fn keyboard() -> Self {
-        Self {
-            kind: Kind::KeycapKeyboard,
-            detail: Detail::None,
-        }
+        Self::Keyboard
     }
 
     /// keycap's pointer with `caps`.
     pub fn pointer(caps: PointerCaps) -> Self {
-        Self {
-            kind: Kind::KeycapPointer,
-            detail: Detail::Pointer(caps),
+        Self::Pointer(caps)
+    }
+
+    /// The kind of device asked for.
+    pub const fn kind(&self) -> Kind {
+        match self {
+            Self::Touchpad => Kind::PalmrestTouchpad,
+            Self::Wheel => Kind::PalmrestWheel,
+            Self::Keys(_) => Kind::PalmrestKeys,
+            Self::Keyboard => Kind::KeycapKeyboard,
+            Self::Pointer(_) => Kind::KeycapPointer,
         }
     }
 }

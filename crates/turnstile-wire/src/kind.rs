@@ -14,6 +14,9 @@ pub enum Delivery {
 }
 
 impl Delivery {
+    /// Every delivery.
+    pub const ALL: [Delivery; 2] = [Delivery::Proxied, Delivery::Handed];
+
     /// The byte on the wire.
     pub const fn code(self) -> u8 {
         match self {
@@ -23,12 +26,8 @@ impl Delivery {
     }
 
     /// The delivery with wire byte `code`.
-    pub const fn from_code(code: u8) -> Option<Self> {
-        match code {
-            0 => Some(Self::Proxied),
-            1 => Some(Self::Handed),
-            _ => None,
-        }
+    pub fn from_code(code: u8) -> Option<Self> {
+        Self::ALL.into_iter().find(|d| d.code() == code)
     }
 }
 
@@ -70,15 +69,8 @@ impl Kind {
     }
 
     /// The kind with wire byte `code`.
-    pub const fn from_code(code: u8) -> Option<Self> {
-        match code {
-            1 => Some(Self::PalmrestTouchpad),
-            2 => Some(Self::PalmrestWheel),
-            3 => Some(Self::PalmrestKeys),
-            16 => Some(Self::KeycapKeyboard),
-            17 => Some(Self::KeycapPointer),
-            _ => None,
-        }
+    pub fn from_code(code: u8) -> Option<Self> {
+        Self::ALL.into_iter().find(|k| k.code() == code)
     }
 
     /// How events of this kind reach the kernel.

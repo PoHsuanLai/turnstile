@@ -26,5 +26,5 @@ pub use event::Event;
 pub use kind::{Delivery, Kind};
 pub use limiter::{Admit, Limiter, Millis};
 pub use maker::Maker;
-pub use message::{Create, Detail, DeviceId, PointerCaps, Reason, Reply, Request};
+pub use message::{Create, DeviceId, PointerCaps, Reason, Reply, Request};
 pub use spec::{AbsAxis, DeviceSpec};

@@ -45,9 +45,6 @@ pub enum WireError {
     /// The delivery byte is not known.
     #[error("delivery {0} is not known")]
     Delivery(u8),
-    /// The description does not belong to the kind.
-    #[error("the description does not fit the device kind")]
-    Detail,
     /// The label is not plain text of the allowed length.
     #[error("the label is not plain text of at most 62 bytes")]
     Label,

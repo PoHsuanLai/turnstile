@@ -21,7 +21,7 @@ pub(super) fn plan(maker: Maker, requested: &[u16]) -> Result<Plan, BadCaps> {
         return Err(BadCaps::NoKeys);
     }
     if requested.len() > MAX_KEY_CODES {
-        return Err(BadCaps::Detail);
+        return Err(BadCaps::TooManyKeys);
     }
     if let Some(&bad) = requested.iter().find(|&&c| class_of(c).is_none()) {
         return Err(BadCaps::UnknownKey(bad));

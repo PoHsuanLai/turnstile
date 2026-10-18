@@ -2,7 +2,7 @@
 
 use turnstile_wire::ceiling::{KEYBOARD_NAME, POINTER_SUFFIX};
 use turnstile_wire::codes::*;
-use turnstile_wire::{AbsAxis, BadCaps, Create, Kind, PointerCaps, plan};
+use turnstile_wire::{AbsAxis, BadCaps, Create, PointerCaps, plan};
 
 #[test]
 fn the_keyboard_is_the_full_keyboard_of_keycap() {
@@ -165,19 +165,4 @@ fn duplicate_axes_collapse_to_the_first() {
     };
     let spec = plan(&Create::pointer(caps)).expect("plans").spec;
     assert_eq!(spec.abs, [axis(ABS_X, 0, 10)]);
-}
-
-#[test]
-fn a_mismatched_detail_is_refused_for_every_keycap_kind() {
-    let keyboard_with_pointer = Create {
-        kind: Kind::KeycapKeyboard,
-        detail: turnstile_wire::Detail::Pointer(trackpad()),
-    };
-    let pointer_with_none = Create {
-        kind: Kind::KeycapPointer,
-        detail: turnstile_wire::Detail::None,
-    };
-    for create in [keyboard_with_pointer, pointer_with_none] {
-        assert!(matches!(plan(&create), Err(BadCaps::Detail)), "{create:?}");
-    }
 }

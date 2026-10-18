@@ -173,7 +173,11 @@ fn requests_outside_the_name_table_are_refused() {
         ("key zero", vec![0], BadCaps::UnknownKey(0)),
         ("a button", vec![0x110], BadCaps::UnknownKey(0x110)),
         ("one good one bad", vec![A, 9999], BadCaps::UnknownKey(9999)),
-        ("over the cap", vec![A; MAX_KEY_CODES + 1], BadCaps::Detail),
+        (
+            "over the cap",
+            vec![A; MAX_KEY_CODES + 1],
+            BadCaps::TooManyKeys,
+        ),
     ];
     for (name, codes, want) in table {
         let got = plan(&Create::keys(codes.clone())).err();
