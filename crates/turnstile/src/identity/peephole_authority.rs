@@ -8,7 +8,7 @@
 //! process itself ([`super::unit_files`]). A listed program whose image checks out but whose unit
 //! does not stays at `Proof::Exe`, and the policy refuses it.
 
-use super::{Authority, Caller, Credential, IdentifyError, Strength, unit_files};
+use super::{Authority, Caller, Credential, IdentifyError, unit_files};
 use crate::journal::{self, kv};
 use peephole::{Pinned, Prober, ProcFs, RealProc, TableFiles};
 use peephole_core::{Exe, Facts, Proof, Standing, Table, judge};
@@ -112,11 +112,7 @@ fn credential(standing: &Standing) -> Credential {
     match standing {
         Standing::Service { role, proof, .. } => Credential::Listed {
             role: role.clone(),
-            strength: match proof {
-                Proof::Exe => Strength::Image,
-                Proof::Full => Strength::Unit,
-                _ => Strength::Cgroup,
-            },
+            proof: *proof,
         },
         _ => Credential::Unlisted,
     }

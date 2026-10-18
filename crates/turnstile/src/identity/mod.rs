@@ -9,21 +9,9 @@ pub mod peephole_authority;
 pub mod seat;
 pub mod unit_files;
 
-use peephole_core::RoleName;
+use peephole_core::{Proof, RoleName};
 use rustix::net::sockopt::socket_peercred;
 use std::os::fd::OwnedFd;
-
-/// How well a caller was proven to be the listed program, weakest first.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Strength {
-    /// Only the control group it runs in.
-    Cgroup,
-    /// And its image: a root-owned file that is in the table.
-    Image,
-    /// And the unit: its files are root-owned, it unsets the loader variables, and the process
-    /// shows none of them (`peephole`'s `Full`).
-    Unit,
-}
 
 /// What the table says about a caller.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,8 +20,9 @@ pub enum Credential {
     Listed {
         /// Its role in the table (`pad_daemon`, `keymap_daemon`, ...).
         role: RoleName,
-        /// How well it was proven.
-        strength: Strength,
+        /// How well it was proven (`Full` is the unit: its files are root-owned, it unsets the
+        /// loader variables, and the process shows none of them).
+        proof: Proof,
     },
     /// Not in the table, or not proven.
     Unlisted,

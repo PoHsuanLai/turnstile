@@ -1,5 +1,6 @@
 use crate::support::{KEYCAP_UID, PALMREST_CGROUP, PALMREST_UID, USER, keycap, listed, palmrest};
-use turnstile::identity::{ActiveUid, Caller, Credential, Strength};
+use peephole_core::Proof;
+use turnstile::identity::{ActiveUid, Caller, Credential};
 use turnstile::policy::{Refusal, authorise};
 use turnstile_wire::Kind;
 
@@ -71,7 +72,7 @@ fn refusals_table() {
         (
             "another role: the shell",
             Kind::PalmrestWheel,
-            listed("shell", Strength::Unit, PALMREST_UID, PALMREST_CGROUP),
+            listed("shell", Proof::Full, PALMREST_UID, PALMREST_CGROUP),
             seat(Some(USER)),
             WrongRole {
                 have: "shell".to_owned(),
@@ -98,12 +99,7 @@ fn refusals_table() {
         (
             "palmrest proven by its control group only",
             Kind::PalmrestTouchpad,
-            listed(
-                "pad_daemon",
-                Strength::Cgroup,
-                PALMREST_UID,
-                PALMREST_CGROUP,
-            ),
+            listed("pad_daemon", Proof::Cgroup, PALMREST_UID, PALMREST_CGROUP),
             seat(Some(USER)),
             TooWeak,
         ),
@@ -112,7 +108,7 @@ fn refusals_table() {
             Kind::KeycapKeyboard,
             listed(
                 "keymap_daemon",
-                Strength::Cgroup,
+                Proof::Cgroup,
                 KEYCAP_UID,
                 "/system.slice/keycap.service",
             ),
@@ -122,14 +118,14 @@ fn refusals_table() {
         (
             "palmrest running as the logged in user",
             Kind::PalmrestWheel,
-            listed("pad_daemon", Strength::Unit, USER, PALMREST_CGROUP),
+            listed("pad_daemon", Proof::Full, USER, PALMREST_CGROUP),
             seat(Some(USER)),
             WrongUser,
         ),
         (
             "palmrest as a user unit of the person",
             Kind::PalmrestWheel,
-            listed("pad_daemon", Strength::Unit, PALMREST_UID, user_palmrest),
+            listed("pad_daemon", Proof::Full, PALMREST_UID, user_palmrest),
             seat(Some(USER)),
             WrongPlace,
         ),
@@ -138,7 +134,7 @@ fn refusals_table() {
             Kind::PalmrestWheel,
             listed(
                 "pad_daemon",
-                Strength::Unit,
+                Proof::Full,
                 PALMREST_UID,
                 "/system.slice/palmrest.service/x",
             ),
@@ -150,7 +146,7 @@ fn refusals_table() {
             Kind::PalmrestWheel,
             listed(
                 "pad_daemon",
-                Strength::Unit,
+                Proof::Full,
                 PALMREST_UID,
                 "/system.slice/keycap.service",
             ),
@@ -162,7 +158,7 @@ fn refusals_table() {
             Kind::KeycapKeyboard,
             listed(
                 "keymap_daemon",
-                Strength::Unit,
+                Proof::Full,
                 USER,
                 "/system.slice/keycap.service",
             ),
@@ -172,7 +168,7 @@ fn refusals_table() {
         (
             "keycap as a user unit of the person",
             Kind::KeycapKeyboard,
-            listed("keymap_daemon", Strength::Unit, KEYCAP_UID, user_keycap),
+            listed("keymap_daemon", Proof::Full, KEYCAP_UID, user_keycap),
             seat(Some(USER)),
             WrongPlace,
         ),
@@ -181,7 +177,7 @@ fn refusals_table() {
             Kind::KeycapPointer,
             listed(
                 "keymap_daemon",
-                Strength::Unit,
+                Proof::Full,
                 KEYCAP_UID,
                 "/system.slice/keycap.service/x",
             ),
@@ -194,28 +190,28 @@ fn refusals_table() {
     }
 }
 
-/// NEW-PI-4: every strength below the unit's own is refused for every kind, in the right place and
+/// NEW-PI-4: every proof below the unit's own is refused for every kind, in the right place and
 /// as the right user; only the unit's proof is enough.
 #[test]
 fn only_a_proven_unit_gets_devices_whatever_the_place_is() {
-    let table: &[(&str, Strength, Result<(), Refusal>)] = &[
+    let table: &[(&str, Proof, Result<(), Refusal>)] = &[
         (
             "its control group only",
-            Strength::Cgroup,
+            Proof::Cgroup,
             Err(Refusal::TooWeak),
         ),
         (
             "its control group and its image",
-            Strength::Image,
+            Proof::Exe,
             Err(Refusal::TooWeak),
         ),
-        ("its unit", Strength::Unit, Ok(())),
+        ("its unit", Proof::Full, Ok(())),
     ];
-    for (name, strength, want) in table {
-        let pad = listed("pad_daemon", *strength, PALMREST_UID, PALMREST_CGROUP);
+    for (name, proof, want) in table {
+        let pad = listed("pad_daemon", *proof, PALMREST_UID, PALMREST_CGROUP);
         let key = listed(
             "keymap_daemon",
-            *strength,
+            *proof,
             KEYCAP_UID,
             "/system.slice/keycap.service",
         );

@@ -3,14 +3,14 @@
 
 use crate::support::{PALMREST_UID, USER};
 use peephole::{FixtureImage, FixtureProc, FixtureProcess, Prober, TableFiles};
-use peephole_core::{FileTrust, LOADER_VARIABLES, Pid, RoleName, Uid, Writer};
+use peephole_core::{FileTrust, LOADER_VARIABLES, Pid, Proof, RoleName, Uid, Writer};
 use rustix::net::sockopt::socket_peercred;
 use rustix::net::{AddressFamily, SocketFlags, SocketType, socketpair};
 use std::os::fd::OwnedFd;
 use std::path::PathBuf;
 use turnstile::identity::fake::FixedAuthority;
 use turnstile::identity::peephole_authority::PeepholeAuthority;
-use turnstile::identity::{ActiveUid, Authority, Credential, IdentifyError, Strength};
+use turnstile::identity::{ActiveUid, Authority, Credential, IdentifyError};
 use turnstile::policy::{Refusal, authorise};
 use turnstile_wire::Kind;
 
@@ -122,7 +122,7 @@ fn keycap_in_its_system_unit_with_a_root_owned_image_and_a_proven_unit_is_listed
         caller.credential,
         Credential::Listed {
             role: role("keymap_daemon"),
-            strength: Strength::Unit
+            proof: Proof::Full
         }
     );
 }
@@ -135,32 +135,28 @@ fn a_listed_image_is_unit_strength_only_when_the_unit_and_the_process_both_check
     let mine = FileTrust::Writable(Writer::Owner(Uid::new(1000)));
     let drop_in = "/usr/lib/systemd/system/keycap.service.d/10-local.conf";
     let one_short = LOADER_VARIABLES[1..].join(" ");
-    let table: Vec<(&str, FixtureProc, Strength)> = vec![
-        ("the real unit", keycap_world(), Strength::Unit),
+    let table: Vec<(&str, FixtureProc, Proof)> = vec![
+        ("the real unit", keycap_world(), Proof::Full),
         (
             "a harmless root drop-in",
             keycap_world().file(drop_in, "[Service]\nMemoryMax=1M\n", root),
-            Strength::Unit,
+            Proof::Full,
         ),
-        (
-            "no unit file at all",
-            proc_files(tree(), 0),
-            Strength::Image,
-        ),
+        ("no unit file at all", proc_files(tree(), 0), Proof::Exe),
         (
             "a unit file a person can write",
             keycap_world().file(KEYCAP_UNIT_FILE, keycap_unit(), mine),
-            Strength::Image,
+            Proof::Exe,
         ),
         (
             "a drop-in a person can write",
             keycap_world().file(drop_in, "[Service]\nMemoryMax=1M\n", mine),
-            Strength::Image,
+            Proof::Exe,
         ),
         (
             "a root drop-in that empties the unset list",
             keycap_world().file(drop_in, "[Service]\nUnsetEnvironment=\n", root),
-            Strength::Image,
+            Proof::Exe,
         ),
         (
             "a unit that leaves one loader variable out",
@@ -171,7 +167,7 @@ fn a_listed_image_is_unit_strength_only_when_the_unit_and_the_process_both_check
                 ),
                 root,
             ),
-            Strength::Image,
+            Proof::Exe,
         ),
         (
             "a unit that runs another program",
@@ -183,22 +179,22 @@ fn a_listed_image_is_unit_strength_only_when_the_unit_and_the_process_both_check
                 ),
                 root,
             ),
-            Strength::Image,
+            Proof::Exe,
         ),
         (
             "a run-time unit of that name",
             keycap_world().file("/run/systemd/transient/keycap.service", "", root),
-            Strength::Image,
+            Proof::Exe,
         ),
         (
             "a process that is being traced",
             proc_files(keycap_world(), 4242),
-            Strength::Image,
+            Proof::Exe,
         ),
         (
             "a status that cannot be read",
             tree().file(KEYCAP_UNIT_FILE, keycap_unit(), root),
-            Strength::Image,
+            Proof::Exe,
         ),
     ];
     for (name, tree, want) in table {
@@ -206,11 +202,11 @@ fn a_listed_image_is_unit_strength_only_when_the_unit_and_the_process_both_check
         let caller = authority(tree, KEYCAP_CGROUP, image)
             .identify(&socket())
             .expect("identified");
-        let strength = match caller.credential {
-            Credential::Listed { strength, .. } => strength,
+        let proof = match caller.credential {
+            Credential::Listed { proof, .. } => proof,
             Credential::Unlisted => panic!("{name}: unlisted"),
         };
-        assert_eq!(strength, want, "{name}");
+        assert_eq!(proof, want, "{name}");
     }
 }
 
@@ -270,7 +266,7 @@ fn a_hidden_image_is_only_the_cgroup_strength_and_the_policy_refuses_it() {
         caller.credential,
         Credential::Listed {
             role: role("pad_daemon"),
-            strength: Strength::Cgroup
+            proof: Proof::Cgroup
         }
     );
     // Even in the right place and as the right user, a caller whose image was not read gets nothing.

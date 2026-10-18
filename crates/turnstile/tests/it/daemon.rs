@@ -178,12 +178,7 @@ impl Authority for Scripted {
 fn stranger(uid: u32) -> Caller {
     Caller {
         credential: Credential::Unlisted,
-        ..listed(
-            "pad_daemon",
-            turnstile::identity::Strength::Cgroup,
-            uid,
-            "/x",
-        )
+        ..listed("pad_daemon", peephole_core::Proof::Cgroup, uid, "/x")
     }
 }
 
