@@ -302,7 +302,7 @@ fn every_device_kind_is_made_with_the_label_of_the_caller_it_is_for() {
         let backend = FakeBackend::new();
         let admission = all();
         let mut s = Session::new(&backend, &admission);
-        let kind = create.kind;
+        let kind = create.kind();
         let made = s.handle(T0, Request::Create(create));
         assert!(created(&made).is_some(), "{kind:?}");
         let label = backend.log().specs[0].maker.to_string();

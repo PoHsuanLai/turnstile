@@ -108,7 +108,7 @@ impl Session for FakeSession {
             .map_err(|_| ClientError::Refused(Reason::BadCaps))?;
         let device = DeviceId(state.next_id);
         state.next_id = state.next_id.wrapping_add(1);
-        match request.kind.delivery() {
+        match request.kind().delivery() {
             Delivery::Handed => {
                 let (ours, theirs) = socketpair(
                     AddressFamily::UNIX,
