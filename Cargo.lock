@@ -199,8 +199,8 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "peephole"
-version = "0.1.8"
-source = "git+https://github.com/PoHsuanLai/peephole?tag=v0.1.8#bba63d4761b750c0789ca7689df4b86e5213905f"
+version = "0.1.9"
+source = "git+https://github.com/PoHsuanLai/peephole?tag=v0.1.9#f22e99b447d1ef7f84d81ddce6ceb614088ee0ef"
 dependencies = [
  "nix 0.31.3",
  "peephole-core",
@@ -210,8 +210,8 @@ dependencies = [
 
 [[package]]
 name = "peephole-core"
-version = "0.1.8"
-source = "git+https://github.com/PoHsuanLai/peephole?tag=v0.1.8#bba63d4761b750c0789ca7689df4b86e5213905f"
+version = "0.1.9"
+source = "git+https://github.com/PoHsuanLai/peephole?tag=v0.1.9#f22e99b447d1ef7f84d81ddce6ceb614088ee0ef"
 dependencies = [
  "serde",
  "thiserror",
