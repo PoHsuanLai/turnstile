@@ -62,6 +62,16 @@ fn keycap_world() -> FixtureProc {
     )
 }
 
+/// Fedora's drop-in for every service, under a `lib` folder.
+const TIMEOUT_DROP_IN: &str = "systemd/system/service.d/10-timeout-abort.conf";
+
+/// `tree` with `/lib` a link to `target`, as on a merged `/usr`. The tree reads through a link with
+/// its target's trust, so a file under `/lib` stands for what the real file system shows there: a
+/// writable file (a link's own mode is 0777).
+fn merged_usr(tree: FixtureProc, target: &str) -> FixtureProc {
+    tree.link("/lib", target)
+}
+
 fn socket() -> OwnedFd {
     let (a, _b) = socketpair(
         AddressFamily::UNIX,
@@ -182,6 +192,20 @@ fn a_listed_image_is_unit_strength_only_when_the_unit_and_the_process_both_check
                 ),
                 root,
             ),
+            Proof::Exe,
+        ),
+        (
+            "a root drop-in for every service on a merged /usr, seen again through /lib",
+            merged_usr(keycap_world(), "/usr/lib")
+                .file(&format!("/usr/lib/{TIMEOUT_DROP_IN}"), "[Service]\n", root)
+                .file(&format!("/lib/{TIMEOUT_DROP_IN}"), "[Service]\n", mine),
+            Proof::Full,
+        ),
+        (
+            "a unit folder linked to a place a person can write",
+            merged_usr(keycap_world(), "/home/someone/units")
+                .dir("/home/someone/units", mine)
+                .file(&format!("/lib/{TIMEOUT_DROP_IN}"), "[Service]\n", mine),
             Proof::Exe,
         ),
         (

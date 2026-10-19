@@ -97,11 +97,57 @@ impl Manager {
         }
     }
 
-    fn dirs(self) -> &'static [&'static str] {
+    fn listed(self) -> &'static [&'static str] {
         match self {
             Self::System => &SYSTEM_DIRS,
             Self::User => &USER_DIRS,
         }
+    }
+
+    /// The folders this manager reads, without those that are another listed folder under a
+    /// second name. On a merged `/usr` (Fedora, Arch, Ubuntu) `/lib` is a link to `usr/lib`, so
+    /// `/lib/systemd/system` is `/usr/lib/systemd/system` again; read through the link, every file
+    /// in it would look writable (a link's own mode is 0777), and every unit with a drop-in there
+    /// would fail its proof. A folder reached through a link to anywhere else is kept, and the
+    /// ownership walk judges it.
+    fn dirs<P: ProcFs>(self, fs: &P) -> Vec<&'static str> {
+        let listed = self.listed();
+        listed
+            .iter()
+            .copied()
+            .filter(|dir| match resolved(fs, Path::new(dir)) {
+                Some(real) => !listed.iter().any(|other| Path::new(other) == real),
+                None => true,
+            })
+            .collect()
+    }
+}
+
+/// The most links followed while resolving one folder.
+const LINK_HOPS_MAX: usize = 8;
+
+/// The path `dir` names once the links among its folders are followed, or `None` when no part of
+/// it is a link (or a link cannot be read: the folder is then kept and walked as it is).
+fn resolved<P: ProcFs>(fs: &P, dir: &Path) -> Option<PathBuf> {
+    let mut path = dir.to_path_buf();
+    let mut hops = 0;
+    'restart: loop {
+        let mut prefix = PathBuf::new();
+        for part in path.components() {
+            prefix.push(part);
+            let Ok(target) = fs.read_link(&prefix) else {
+                continue;
+            };
+            hops += 1;
+            if hops > LINK_HOPS_MAX {
+                return None;
+            }
+            let base = prefix.parent().map(Path::to_path_buf).unwrap_or_default();
+            let rest = path.strip_prefix(&prefix).ok()?.to_path_buf();
+            path = base.join(target).join(rest);
+            continue 'restart;
+        }
+        return (hops > 0).then_some(path);
     }
 }
 
@@ -138,7 +184,7 @@ impl UnitText {
     fn find<P: ProcFs>(fs: &P, manager: Manager, name: &UnitName) -> Result<Self, NotUnit> {
         let mut fragment = Fragment::Missing;
         let mut order = Vec::new();
-        for dir in manager.dirs() {
+        for dir in manager.dirs(fs) {
             let path = Path::new(dir).join(name.as_str());
             if let Some(trust) = trust_if_present(fs, &path)?
                 && matches!(fragment, Fragment::Missing)
@@ -184,7 +230,7 @@ fn drop_in_files<P: ProcFs>(
 ) -> Result<(DropIns, Vec<PathBuf>), NotUnit> {
     let mut summary = DropIns::None;
     let mut files = Vec::new();
-    for dir in manager.dirs() {
+    for dir in manager.dirs(fs) {
         for folder in [format!("{}.d", name.as_str()), "service.d".to_owned()] {
             for path in conf_files(fs, &Path::new(dir).join(folder))? {
                 let trust = trust_of_file(fs, &path)?;
