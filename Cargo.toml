@@ -5,6 +5,7 @@ resolver = "3"
 # link: sync, small, no bus and no async runtime. turnstile is the root daemon.
 # scripts/check-boundary.sh checks the edges.
 members = ["crates/turnstile-wire", "crates/turnstile-client", "crates/turnstile"]
+exclude = ["vendor/input-linux-sys"]
 
 [workspace.package]
 version = "0.1.1"
@@ -32,6 +33,12 @@ listenfd = "1.0"
 # Constants only (AF_UNIX, SOCK_SEQPACKET) for listenfd.
 libc = "0.2"
 tempfile = "3"
+
+# input-linux-sys 0.9.0 (the latest) encodes UI_SET_PHYS with the wrong size, so the device's
+# maker label could never be set; vendor/input-linux-sys is that release with the one declaration
+# corrected (vendor/input-linux-sys/src/uinput.rs, ui_set_phys). Drop it when a fixed release exists.
+[patch.crates-io]
+input-linux-sys = { path = "vendor/input-linux-sys" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
