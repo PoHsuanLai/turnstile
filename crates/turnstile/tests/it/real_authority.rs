@@ -133,10 +133,10 @@ fn keycap_in_its_system_unit_with_a_root_owned_image_and_a_proven_unit_is_listed
     );
     assert_eq!(
         caller.credential,
-        Credential::Listed {
+        Some(Credential {
             role: role("keymap_daemon"),
             proof: Proof::Full
-        }
+        })
     );
 }
 
@@ -230,8 +230,8 @@ fn a_listed_image_is_unit_strength_only_when_the_unit_and_the_process_both_check
             .identify(&socket())
             .expect("identified");
         let proof = match caller.credential {
-            Credential::Listed { proof, .. } => proof,
-            Credential::Unlisted => panic!("{name}: unlisted"),
+            Some(Credential { proof, .. }) => proof,
+            None => panic!("{name}: unlisted"),
         };
         assert_eq!(proof, want, "{name}");
     }
@@ -291,10 +291,10 @@ fn a_hidden_image_is_only_the_cgroup_strength_and_the_policy_refuses_it() {
         .expect("identified");
     assert_eq!(
         caller.credential,
-        Credential::Listed {
+        Some(Credential {
             role: role("pad_daemon"),
             proof: Proof::Cgroup
-        }
+        })
     );
     // Even in the right place and as the right user, a caller whose image was not read gets nothing.
     let caller = turnstile::identity::Caller {
@@ -323,7 +323,7 @@ fn a_user_writable_image_a_stranger_and_a_wrong_row_are_all_unlisted() {
         let caller = authority(tree(), KEYCAP_CGROUP, image)
             .identify(&socket())
             .expect("identified");
-        assert_eq!(caller.credential, Credential::Unlisted, "{name}");
+        assert_eq!(caller.credential, None, "{name}");
     }
 }
 

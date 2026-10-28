@@ -104,6 +104,12 @@ Departures from the plan, standing facts and open items. An entry names the cond
     not a secret and not signed: it is trusted because only root can create the device. A device made
     some other way (a `uinput` group member on a standalone install, ydotool) has none.
 
+14. **Plain types (owner, 2026-10-28).** The type rule changed (CONVENTIONS 13). `Verdict` became
+    `Result<Event, Denial>`, `Handled` a `Result` over `Outgoing`/`Refused`, `Idling` a `bool`,
+    `Phase` a `bool` method, `Flood` an `Option`, and `Credential` is a struct held as an `Option`.
+    No behaviour, wire or table change. The Proxied-or-Handed mirrors (`Route`, `Made`) wait for
+    palmrest's wave.
+
 ## Unverified (nothing here was compiled or run; the gate checks each)
 
 0. NEW-PI-4: `peephole` is now tag `v0.1.4` (Cargo.lock to be refreshed). The calls added are `UnitFacts`

@@ -1,18 +1,18 @@
 use std::fmt::Display;
 use turnstile::activation::{ActivationError, listener};
 use turnstile::clock::{Clock, ManualClock};
-use turnstile::idle::{Idle, Idling};
+use turnstile::idle::Idle;
 use turnstile::journal::{kv, line};
 use turnstile_wire::Millis;
 
 #[test]
 fn the_service_leaves_after_the_limit_with_no_connection_and_not_before() {
     let mut idle = Idle::new(60_000);
-    let steps: &[(u64, usize, Idling)] = &[
-        (0, 0, Idling::Stay),
-        (30_000, 0, Idling::Stay),
-        (59_999, 0, Idling::Stay),
-        (60_000, 0, Idling::Exit),
+    let steps: &[(u64, usize, bool)] = &[
+        (0, 0, false),
+        (30_000, 0, false),
+        (59_999, 0, false),
+        (60_000, 0, true),
     ];
     for &(ms, live, want) in steps {
         assert_eq!(idle.observe(Millis(ms), live), want, "at {ms} ms");
@@ -22,17 +22,13 @@ fn the_service_leaves_after_the_limit_with_no_connection_and_not_before() {
 #[test]
 fn a_connection_restarts_the_count() {
     let mut idle = Idle::new(1_000);
-    assert_eq!(idle.observe(Millis(0), 0), Idling::Stay);
-    assert_eq!(idle.observe(Millis(900), 1), Idling::Stay);
+    assert!(!idle.observe(Millis(0), 0));
+    assert!(!idle.observe(Millis(900), 1));
     // The connection ends at 5000: the minute starts there, not at the first look.
-    assert_eq!(idle.observe(Millis(5_000), 0), Idling::Stay);
-    assert_eq!(idle.observe(Millis(5_999), 0), Idling::Stay);
-    assert_eq!(idle.observe(Millis(6_000), 0), Idling::Exit);
-    assert_eq!(
-        idle.observe(Millis(2), 3),
-        Idling::Stay,
-        "time going back is no panic"
-    );
+    assert!(!idle.observe(Millis(5_000), 0));
+    assert!(!idle.observe(Millis(5_999), 0));
+    assert!(idle.observe(Millis(6_000), 0));
+    assert!(!idle.observe(Millis(2), 3), "time going back is no panic");
 }
 
 #[test]

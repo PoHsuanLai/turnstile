@@ -1,6 +1,6 @@
 use crate::support::{KEYCAP_UID, PALMREST_CGROUP, PALMREST_UID, USER, keycap, listed, palmrest};
 use peephole_core::{Proof, Uid};
-use turnstile::identity::{ActiveUid, Caller, Credential};
+use turnstile::identity::{ActiveUid, Caller};
 use turnstile::policy::{Refusal, authorise};
 use turnstile_wire::Kind;
 
@@ -63,7 +63,7 @@ fn refusals_table() {
             "not in the table",
             Kind::PalmrestWheel,
             Caller {
-                credential: Credential::Unlisted,
+                credential: None,
                 ..palmrest()
             },
             seat(Some(USER)),

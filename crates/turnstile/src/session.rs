@@ -15,16 +15,11 @@ use turnstile_wire::{
 
 /// A reply, with the descriptor that rides with it when the device is handed over.
 #[derive(Debug)]
-pub enum Outgoing {
-    /// A reply alone.
-    Reply(Reply),
-    /// A `Created` with the device's descriptor.
-    Handed {
-        /// The reply.
-        reply: Reply,
-        /// The device.
-        fd: OwnedFd,
-    },
+pub struct Outgoing {
+    /// The reply.
+    pub reply: Reply,
+    /// The device's descriptor, sent with a `Created` for a handed device.
+    pub fd: Option<OwnedFd>,
 }
 
 /// Why a peer was refused, for the log.
@@ -36,31 +31,18 @@ pub struct Note {
     pub why: String,
 }
 
-/// What a request led to.
+/// The peer was refused: send it `Refused(reason)`, log the note and close the connection.
 #[derive(Debug)]
-pub enum Handled {
-    /// Keep reading, after sending the reply if there is one.
-    Go(Option<Outgoing>),
-    /// The peer was refused: send it `Refused(reason)`, log the note and close the connection.
-    Refuse {
-        /// What the peer is told.
-        reason: Reason,
-        /// What goes to the log.
-        note: Note,
-    },
+pub struct Refused {
+    /// What the peer is told.
+    pub reason: Reason,
+    /// What goes to the log.
+    pub note: Note,
 }
 
-impl Handled {
-    fn go() -> Self {
-        Self::Go(None)
-    }
-
-    fn reply(out: Outgoing) -> Self {
-        Self::Go(Some(out))
-    }
-
-    fn refuse(reason: Reason, kind: Option<Kind>, why: impl ToString) -> Self {
-        Self::Refuse {
+impl Refused {
+    fn new(reason: Reason, kind: Option<Kind>, why: impl ToString) -> Self {
+        Self {
             reason,
             note: Note {
                 kind,
@@ -70,15 +52,8 @@ impl Handled {
     }
 }
 
-/// Where a connection is in its life.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Phase {
-    /// No device made yet: the peer has a second to ask for one.
-    Handshake,
-    /// At least one device made: the peer may be silent for as long as it likes.
-    Serving,
-}
+/// What a request led to: keep reading after sending the reply if there is one, or refuse the peer.
+pub type Handled = Result<Option<Outgoing>, Refused>;
 
 /// What a connection cost, for the log when it ends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -119,13 +94,10 @@ impl<'a, B: Backend, A: Admission> Session<'a, B, A> {
         }
     }
 
-    /// Where the connection is in its life.
-    pub fn phase(&self) -> Phase {
-        if self.created == 0 {
-            Phase::Handshake
-        } else {
-            Phase::Serving
-        }
+    /// True until a device is made: the peer has a short while to ask for one, and may then be
+    /// silent for as long as it likes.
+    pub fn in_handshake(&self) -> bool {
+        self.created == 0
     }
 
     /// What the connection has cost so far.
@@ -145,7 +117,7 @@ impl<'a, B: Backend, A: Admission> Session<'a, B, A> {
             Request::Events { device, events } => self.events(now, device, &events),
             Request::Destroy { device } => {
                 self.slots.retain(|slot| slot.id != device);
-                Handled::go()
+                Ok(None)
             }
         }
     }
@@ -153,7 +125,7 @@ impl<'a, B: Backend, A: Admission> Session<'a, B, A> {
     fn create(&mut self, now: Millis, create: &Create) -> Handled {
         let kind = Some(create.kind());
         if let Err(why) = self.admission.admit(create.kind()) {
-            return Handled::refuse(Reason::NotAllowed, kind, why);
+            return Err(Refused::new(Reason::NotAllowed, kind, why));
         }
         let delivery = create.kind().delivery();
         let over = self.created >= MAX_CREATES_PER_CONNECTION
@@ -162,15 +134,19 @@ impl<'a, B: Backend, A: Admission> Session<'a, B, A> {
                 _ => self.slots.len() >= MAX_DEVICES_PER_CONNECTION,
             };
         if over {
-            return Handled::refuse(Reason::TooMany, kind, "too many devices on one connection");
+            return Err(Refused::new(
+                Reason::TooMany,
+                kind,
+                "too many devices on one connection",
+            ));
         }
         let planned = match plan(create) {
             Ok(planned) => planned,
-            Err(why) => return Handled::refuse(Reason::BadCaps, kind, why),
+            Err(why) => return Err(Refused::new(Reason::BadCaps, kind, why)),
         };
         let device = match self.backend.create(&planned.spec) {
             Ok(device) => device,
-            Err(why) => return Handled::refuse(Reason::Unavailable, kind, why),
+            Err(why) => return Err(Refused::new(Reason::Unavailable, kind, why)),
         };
         // `created` is at most 64, so the id never wraps and is never reused on a connection.
         let id = DeviceId(self.created);
@@ -183,20 +159,23 @@ impl<'a, B: Backend, A: Admission> Session<'a, B, A> {
                     filter,
                     limiter: Limiter::new(now),
                 });
-                Handled::reply(Outgoing::Reply(Reply::Created {
-                    device: id,
-                    delivery: Delivery::Proxied,
+                Ok(Some(Outgoing {
+                    reply: Reply::Created {
+                        device: id,
+                        delivery: Delivery::Proxied,
+                    },
+                    fd: None,
                 }))
             }
             Route::Handed => {
                 self.handed += 1;
-                Handled::reply(Outgoing::Handed {
+                Ok(Some(Outgoing {
                     reply: Reply::Created {
                         device: id,
                         delivery: Delivery::Handed,
                     },
-                    fd: device.into_fd(),
-                })
+                    fd: Some(device.into_fd()),
+                }))
             }
         }
     }
@@ -204,43 +183,43 @@ impl<'a, B: Backend, A: Admission> Session<'a, B, A> {
     fn events(&mut self, now: Millis, device: DeviceId, events: &[Event]) -> Handled {
         let Self { slots, stats, .. } = self;
         let Some(slot) = slots.iter_mut().find(|slot| slot.id == device) else {
-            return Handled::refuse(
+            return Err(Refused::new(
                 Reason::Unknown,
                 None,
                 "events for a device that is not there",
-            );
+            ));
         };
         match slot.limiter.admit(now) {
             Admit::Pass => {}
             Admit::Drop => {
                 stats.dropped_datagrams += 1;
-                return Handled::go();
+                return Ok(None);
             }
             Admit::Cut => {
-                return Handled::refuse(
+                return Err(Refused::new(
                     Reason::TooMany,
                     None,
                     "events arrive faster than any device sends them",
-                );
+                ));
             }
-            _ => return Handled::go(),
+            _ => return Ok(None),
         }
         let filtered = slot.filter.apply(events);
         let denied = u32::try_from(filtered.denied.len()).unwrap_or(u32::MAX);
         stats.denied_events = stats.denied_events.saturating_add(denied);
         if stats.denied_events >= MAX_DENIED_EVENTS {
-            return Handled::refuse(
+            return Err(Refused::new(
                 Reason::NotAllowed,
                 None,
                 "too many events outside the ceiling",
-            );
+            ));
         }
         if filtered.pass.is_empty() {
-            return Handled::go();
+            return Ok(None);
         }
         match slot.device.write(&filtered.pass) {
-            Ok(()) => Handled::go(),
-            Err(why) => Handled::refuse(Reason::Unavailable, None, why),
+            Ok(()) => Ok(None),
+            Err(why) => Err(Refused::new(Reason::Unavailable, None, why)),
         }
     }
 }

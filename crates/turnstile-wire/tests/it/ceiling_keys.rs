@@ -3,7 +3,7 @@
 use crate::{key, sync};
 use turnstile_wire::codes::*;
 use turnstile_wire::limits::{MAX_KEY_CODES, MAX_KEYS_DOWN};
-use turnstile_wire::{BadCaps, Create, Denial, Event, Filter, Route, Verdict, plan};
+use turnstile_wire::{BadCaps, Create, Denial, Event, Filter, Route, plan};
 
 const A: u16 = 30;
 const ENTER: u16 = 28;
@@ -20,11 +20,7 @@ fn filter(codes: &[u16]) -> Filter {
 }
 
 fn verdict(f: &mut Filter, event: Event) -> Result<(), Denial> {
-    match f.check(event) {
-        Verdict::Pass(_) => Ok(()),
-        Verdict::Deny(why) => Err(why),
-        _ => panic!("a verdict this table does not know"),
-    }
+    f.check(event).map(|_| ())
 }
 
 #[test]

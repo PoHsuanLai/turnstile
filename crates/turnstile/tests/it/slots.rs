@@ -1,6 +1,6 @@
 use crate::support::{KEYCAP_UID, PALMREST_UID, USER, keycap, palmrest};
 use peephole_core::Uid;
-use turnstile::identity::{ActiveUid, Caller, Credential};
+use turnstile::identity::{ActiveUid, Caller};
 use turnstile::slots::{Bucket, NoSlot, Slots};
 use turnstile_wire::Maker;
 use turnstile_wire::limits::{MAX_CONNECTIONS, MAX_CONNECTIONS_PER_USER, MAX_RESERVED_PER_CLIENT};
@@ -12,7 +12,7 @@ fn seat() -> ActiveUid {
 fn stranger(uid: Uid) -> Caller {
     Caller {
         uid,
-        credential: Credential::Unlisted,
+        credential: None,
         ..palmrest()
     }
 }
@@ -35,7 +35,7 @@ fn a_caller_that_passes_the_policy_has_a_reserve_and_anyone_else_a_user_pool() {
         (
             "palmrest's user is not a free pass",
             Caller {
-                credential: Credential::Unlisted,
+                credential: None,
                 ..palmrest()
             },
             Bucket::Stranger(PALMREST_UID),
@@ -51,7 +51,7 @@ fn a_caller_that_passes_the_policy_has_a_reserve_and_anyone_else_a_user_pool() {
         (
             "keycap's user is not a free pass",
             Caller {
-                credential: Credential::Unlisted,
+                credential: None,
                 ..keycap()
             },
             Bucket::Stranger(KEYCAP_UID),

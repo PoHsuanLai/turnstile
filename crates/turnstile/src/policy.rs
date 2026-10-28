@@ -94,16 +94,16 @@ pub fn authorise(kind: Kind, caller: &Caller, seat: ActiveUid) -> Result<(), Ref
         _ => return Err(Refusal::UnknownKind),
     };
     match &caller.credential {
-        Credential::Listed { role: have, .. } if *have != role => {
+        Some(Credential { role: have, .. }) if *have != role => {
             return Err(Refusal::WrongRole {
                 have: have.to_string(),
             });
         }
-        Credential::Listed { proof, .. } if *proof != Proof::Full => {
+        Some(Credential { proof, .. }) if *proof != Proof::Full => {
             return Err(Refusal::TooWeak);
         }
-        Credential::Listed { .. } => {}
-        Credential::Unlisted => return Err(Refusal::Unlisted),
+        Some(_) => {}
+        None => return Err(Refusal::Unlisted),
     }
     if seat.0 == Some(caller.uid) {
         return Err(Refusal::WrongUser);

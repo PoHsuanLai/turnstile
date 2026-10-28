@@ -20,7 +20,7 @@ pub mod maker;
 pub mod message;
 pub mod spec;
 
-pub use ceiling::{BadCaps, Denial, Filter, Filtered, Plan, Route, Verdict, plan};
+pub use ceiling::{BadCaps, Denial, Filter, Filtered, Plan, Route, plan};
 pub use codec::{WireError, decode_reply, decode_request, encode_reply, encode_request};
 pub use event::Event;
 pub use kind::{Delivery, Kind};

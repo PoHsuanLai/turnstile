@@ -4,7 +4,7 @@
 //! down from arbitrary typing, not a proof of safety (`Ctrl+M` is Enter in a terminal): the gate
 //! is the caller's identity.
 
-use super::filter::{Denial, Filter, Verdict};
+use super::filter::{Denial, Filter};
 use super::{BadCaps, Plan, Route};
 use crate::codes::{EV_KEY, EV_SYN, KEY_LEFTALT, KEY_LEFTCTRL, KEY_LEFTMETA, SYN_REPORT};
 use crate::event::Event;
@@ -60,34 +60,34 @@ impl KeysState {
         self.down.iter().any(|c| CHORD_MODIFIERS.contains(c))
     }
 
-    pub(super) fn check(&mut self, event: Event) -> Verdict {
+    pub(super) fn check(&mut self, event: Event) -> Result<Event, Denial> {
         match (event.kind, event.code) {
-            (EV_SYN, SYN_REPORT) if event.value == 0 => Verdict::Pass(event),
+            (EV_SYN, SYN_REPORT) if event.value == 0 => Ok(event),
             (EV_KEY, code) if self.allowed.contains(&code) => match event.value {
                 0 => {
                     self.down.retain(|&d| d != code);
-                    Verdict::Pass(event)
+                    Ok(event)
                 }
                 1 => self.press(event),
-                _ => Verdict::Deny(Denial::BadValue),
+                _ => Err(Denial::BadValue),
             },
-            _ => Verdict::Deny(Denial::NotAllowed),
+            _ => Err(Denial::NotAllowed),
         }
     }
 
-    fn press(&mut self, event: Event) -> Verdict {
+    fn press(&mut self, event: Event) -> Result<Event, Denial> {
         let code = event.code;
         if self.down.contains(&code) {
-            return Verdict::Pass(event);
+            return Ok(event);
         }
         let class = class_of(code);
         if class == Some(KeyClass::Chorded) && !self.chord_held() {
-            return Verdict::Deny(Denial::NeedsChord);
+            return Err(Denial::NeedsChord);
         }
         if self.down.len() >= MAX_KEYS_DOWN {
-            return Verdict::Deny(Denial::TooManyKeys);
+            return Err(Denial::TooManyKeys);
         }
         self.down.push(code);
-        Verdict::Pass(event)
+        Ok(event)
     }
 }

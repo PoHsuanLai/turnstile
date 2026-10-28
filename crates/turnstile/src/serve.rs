@@ -7,7 +7,7 @@ use crate::identity::{Authority, Caller, SeatSource};
 use crate::journal::{self, kv};
 use crate::link::{self, Inbox, Incoming};
 use crate::policy::CallerAdmission;
-use crate::session::{Handled, Outgoing, Phase, Session};
+use crate::session::{Handled, Outgoing, Refused, Session};
 use std::ops::ControlFlow;
 use std::os::fd::OwnedFd;
 use std::time::Duration;
@@ -73,10 +73,9 @@ pub fn serve_caller<B, A, S, C>(
     let mut inbox = Inbox::new();
     let mut waiting = None;
     loop {
-        let want = match session.phase() {
-            Phase::Handshake => Some(Duration::from_millis(handshake_ms)),
-            _ => None,
-        };
+        let want = session
+            .in_handshake()
+            .then(|| Duration::from_millis(handshake_ms));
         if want != waiting {
             if link::set_receive_timeout(&conn, want).is_err() {
                 return;
@@ -122,18 +121,18 @@ pub fn serve_caller<B, A, S, C>(
 /// Logs a refusal and sends the reply; breaks when the peer was refused or a reply cannot go.
 fn deliver(conn: &OwnedFd, caller: &Caller, handled: Handled) -> ControlFlow<()> {
     match handled {
-        Handled::Go(None) => ControlFlow::Continue(()),
-        Handled::Go(Some(out)) => {
-            let sent = match &out {
-                Outgoing::Reply(reply) => link::send_reply(conn, reply),
-                Outgoing::Handed { reply, fd } => link::send_reply_with_fd(conn, reply, fd),
+        Ok(None) => ControlFlow::Continue(()),
+        Ok(Some(Outgoing { reply, fd })) => {
+            let sent = match &fd {
+                Some(fd) => link::send_reply_with_fd(conn, &reply, fd),
+                None => link::send_reply(conn, &reply),
             };
             match sent {
                 Ok(()) => ControlFlow::Continue(()),
                 Err(_) => ControlFlow::Break(()),
             }
         }
-        Handled::Refuse { reason, note } => {
+        Err(Refused { reason, note }) => {
             let kind = note.kind.map_or("?", |k| k.name());
             journal::note(
                 "refused",

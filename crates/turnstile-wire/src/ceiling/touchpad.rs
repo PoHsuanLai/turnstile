@@ -1,6 +1,6 @@
 //! palmrest's touchpad: exactly the capabilities of its `touchpad_caps`, with the fixed ranges.
 
-use super::filter::{Denial, Filter, Verdict};
+use super::filter::{Denial, Filter};
 use super::{Plan, Route};
 use crate::codes::{
     ABS_MT_POSITION_X, ABS_MT_POSITION_Y, ABS_MT_SLOT, ABS_MT_TRACKING_ID, ABS_X, ABS_Y, BTN_LEFT,
@@ -76,37 +76,37 @@ impl TouchpadState {
         self.down.iter().any(|&d| d)
     }
 
-    pub(super) fn check(&mut self, event: Event) -> Verdict {
+    pub(super) fn check(&mut self, event: Event) -> Result<Event, Denial> {
         let value = event.value;
         match (event.kind, event.code) {
-            (EV_SYN, SYN_REPORT) if value == 0 => Verdict::Pass(event),
+            (EV_SYN, SYN_REPORT) if value == 0 => Ok(event),
             (EV_KEY, code) if KEYS.contains(&code) => self.key(event),
-            (EV_ABS, ABS_X | ABS_MT_POSITION_X) => Verdict::Pass(clamp(event, X_MAX)),
-            (EV_ABS, ABS_Y | ABS_MT_POSITION_Y) => Verdict::Pass(clamp(event, Y_MAX)),
+            (EV_ABS, ABS_X | ABS_MT_POSITION_X) => Ok(clamp(event, X_MAX)),
+            (EV_ABS, ABS_Y | ABS_MT_POSITION_Y) => Ok(clamp(event, Y_MAX)),
             (EV_ABS, ABS_MT_SLOT) => match usize::try_from(value) {
                 Ok(slot) if slot < SLOTS => {
                     self.slot = slot;
-                    Verdict::Pass(event)
+                    Ok(event)
                 }
-                _ => Verdict::Deny(Denial::OutOfRange),
+                _ => Err(Denial::OutOfRange),
             },
             (EV_ABS, ABS_MT_TRACKING_ID) if (-1..=TRACKING_MAX).contains(&value) => {
                 if let Some(down) = self.down.get_mut(self.slot) {
                     *down = value >= 0;
                 }
-                Verdict::Pass(event)
+                Ok(event)
             }
-            (EV_ABS, ABS_MT_TRACKING_ID) => Verdict::Deny(Denial::OutOfRange),
-            _ => Verdict::Deny(Denial::NotAllowed),
+            (EV_ABS, ABS_MT_TRACKING_ID) => Err(Denial::OutOfRange),
+            _ => Err(Denial::NotAllowed),
         }
     }
 
     /// A button or tool changes only to 0 or 1; a click needs a finger down.
-    fn key(&self, event: Event) -> Verdict {
+    fn key(&self, event: Event) -> Result<Event, Denial> {
         match (event.code, event.value) {
-            (BTN_LEFT, 1) if !self.any_down() => Verdict::Deny(Denial::NoContact),
-            (_, 0 | 1) => Verdict::Pass(event),
-            (_, _) => Verdict::Deny(Denial::BadValue),
+            (BTN_LEFT, 1) if !self.any_down() => Err(Denial::NoContact),
+            (_, 0 | 1) => Ok(event),
+            (_, _) => Err(Denial::BadValue),
         }
     }
 }

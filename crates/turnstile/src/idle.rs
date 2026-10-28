@@ -2,16 +2,6 @@
 
 use turnstile_wire::Millis;
 
-/// What to do about the quiet.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Idling {
-    /// Someone is connected, or it has not been quiet long enough.
-    Stay,
-    /// Quiet for the whole limit: exit; socket activation starts the service again.
-    Exit,
-}
-
 /// Counts how long no one has been connected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Idle {
@@ -28,17 +18,14 @@ impl Idle {
         }
     }
 
-    /// Looks at the connection count at `now`.
-    pub fn observe(&mut self, now: Millis, connections: usize) -> Idling {
+    /// Looks at the connection count at `now`. True once it has been quiet for the whole limit:
+    /// the service exits and socket activation starts it again.
+    pub fn observe(&mut self, now: Millis, connections: usize) -> bool {
         if connections > 0 {
             self.quiet_since = None;
-            return Idling::Stay;
+            return false;
         }
         let since = *self.quiet_since.get_or_insert(now);
-        if now.since(since) >= self.limit_ms {
-            Idling::Exit
-        } else {
-            Idling::Stay
-        }
+        now.since(since) >= self.limit_ms
     }
 }

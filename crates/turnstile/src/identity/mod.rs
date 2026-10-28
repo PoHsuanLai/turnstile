@@ -15,19 +15,14 @@ use rustix::io::Errno;
 use rustix::net::sockopt::socket_peercred;
 use std::os::fd::OwnedFd;
 
-/// What the table says about a caller.
+/// What the table says about a listed program of the desktop.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Credential {
-    /// A listed program of the desktop.
-    Listed {
-        /// Its role in the table (`pad_daemon`, `keymap_daemon`, ...).
-        role: RoleName,
-        /// How well it was proven (`Full` is the unit: its files are root-owned, it unsets the
-        /// loader variables, and the process shows none of them).
-        proof: Proof,
-    },
-    /// Not in the table, or not proven.
-    Unlisted,
+pub struct Credential {
+    /// Its role in the table (`pad_daemon`, `keymap_daemon`, ...).
+    pub role: RoleName,
+    /// How well it was proven (`Full` is the unit: its files are root-owned, it unsets the
+    /// loader variables, and the process shows none of them).
+    pub proof: Proof,
 }
 
 /// The facts about the process behind a connection.
@@ -41,8 +36,8 @@ pub struct Caller {
     pub cgroup: CgroupPath,
     /// Its image, for the log (`None` when the kernel hides it).
     pub image: Option<ExePath>,
-    /// What the table says.
-    pub credential: Credential,
+    /// What the table says; `None` when it is not in the table, or not proven.
+    pub credential: Option<Credential>,
 }
 
 impl Caller {

@@ -108,12 +108,12 @@ fn note_unproven(facts: &Facts, why: &dyn std::fmt::Display) {
 }
 
 /// What a standing means to the service: a listed program with a role and a proof, or nothing.
-fn credential(standing: &Standing) -> Credential {
+fn credential(standing: &Standing) -> Option<Credential> {
     match standing {
-        Standing::Service { role, proof, .. } => Credential::Listed {
+        Standing::Service { role, proof, .. } => Some(Credential {
             role: role.clone(),
             proof: *proof,
-        },
-        _ => Credential::Unlisted,
+        }),
+        _ => None,
     }
 }

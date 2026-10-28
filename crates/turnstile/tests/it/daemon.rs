@@ -15,7 +15,7 @@ use turnstile::clock::Monotonic;
 use turnstile::daemon::{Daemon, Settings};
 use turnstile::identity::fake::FixedAuthority;
 use turnstile::identity::seat::FixedSeat;
-use turnstile::identity::{ActiveUid, Authority, Caller, Credential, IdentifyError};
+use turnstile::identity::{ActiveUid, Authority, Caller, IdentifyError};
 use turnstile::pending::Caps;
 use turnstile::serve::Context;
 use turnstile_client::{Broker, ClientError, Create, DeviceSource, Made, Reason, Session};
@@ -178,7 +178,7 @@ impl Authority for Scripted {
 /// A user the service has never heard of, at the seat or not.
 fn stranger(uid: Uid) -> Caller {
     Caller {
-        credential: Credential::Unlisted,
+        credential: None,
         ..listed("pad_daemon", peephole_core::Proof::Cgroup, uid, "/x")
     }
 }

@@ -2,7 +2,7 @@
 
 use crate::{abs, key, rel, sync};
 use turnstile_wire::codes::*;
-use turnstile_wire::{Create, Denial, Event, Filter, Route, Verdict, plan};
+use turnstile_wire::{Create, Denial, Event, Filter, Route, plan};
 
 fn filter(create: &Create) -> Filter {
     let Route::Proxied(filter) = plan(create).expect("within the ceiling").route else {
@@ -135,11 +135,7 @@ fn touchpad_events_table() {
     ];
     for (name, event, want) in table {
         let mut f = filter(&Create::touchpad());
-        let got = match f.check(*event) {
-            Verdict::Pass(e) => Ok(e),
-            Verdict::Deny(why) => Err(why),
-            _ => panic!("a verdict this table does not know"),
-        };
+        let got = f.check(*event);
         assert_eq!(&got, want, "{name}");
     }
 }
@@ -147,11 +143,11 @@ fn touchpad_events_table() {
 #[test]
 fn a_click_needs_a_finger_down_and_ends_when_it_lifts() {
     let mut f = filter(&Create::touchpad());
-    assert_eq!(f.check(key(BTN_LEFT, 1)), Verdict::Deny(Denial::NoContact));
+    assert_eq!(f.check(key(BTN_LEFT, 1)), Err(Denial::NoContact));
     pass_all(&mut f, &[abs(ABS_MT_SLOT, 2), abs(ABS_MT_TRACKING_ID, 1)]);
-    assert_eq!(f.check(key(BTN_LEFT, 1)), Verdict::Pass(key(BTN_LEFT, 1)));
+    assert_eq!(f.check(key(BTN_LEFT, 1)), Ok(key(BTN_LEFT, 1)));
     pass_all(&mut f, &[abs(ABS_MT_TRACKING_ID, -1)]);
-    assert_eq!(f.check(key(BTN_LEFT, 1)), Verdict::Deny(Denial::NoContact));
+    assert_eq!(f.check(key(BTN_LEFT, 1)), Err(Denial::NoContact));
 }
 
 #[test]

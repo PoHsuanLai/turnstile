@@ -1,7 +1,7 @@
 use peephole_core::roles::{KEYMAP_DAEMON, PAD_DAEMON};
 use turnstile::backend::fake::{FakeBackend, Fate};
 use turnstile::policy::AllowKinds;
-use turnstile::session::{Handled, Outgoing, Phase, Session};
+use turnstile::session::{Handled, Outgoing, Refused, Session};
 use turnstile_wire::codes::*;
 use turnstile_wire::limits::{
     EVENT_BURST, FLOOD_CUT_MS, MAX_CREATES_PER_CONNECTION, MAX_DENIED_EVENTS,
@@ -16,21 +16,15 @@ fn all() -> AllowKinds {
 }
 
 fn refused(handled: &Handled) -> Option<Reason> {
-    match handled {
-        Handled::Refuse { reason, .. } => Some(*reason),
-        Handled::Go(_) => None,
-    }
+    handled.as_ref().err().map(|refused| refused.reason)
 }
 
 fn created(handled: &Handled) -> Option<(DeviceId, Delivery)> {
     match handled {
-        Handled::Go(Some(
-            Outgoing::Reply(Reply::Created { device, delivery })
-            | Outgoing::Handed {
-                reply: Reply::Created { device, delivery },
-                ..
-            },
-        )) => Some((*device, *delivery)),
+        Ok(Some(Outgoing {
+            reply: Reply::Created { device, delivery },
+            ..
+        })) => Some((*device, *delivery)),
         _ => None,
     }
 }
@@ -53,15 +47,15 @@ fn a_palmrest_device_is_made_fed_and_destroyed_with_the_connection() {
     let backend = FakeBackend::new();
     let admission = all();
     let mut s = Session::new(&backend, &admission);
-    assert_eq!(s.phase(), Phase::Handshake);
+    assert!(s.in_handshake());
 
     let made = s.handle(T0, Request::Create(Create::wheel()));
     assert_eq!(created(&made), Some((DeviceId(0), Delivery::Proxied)));
-    assert_eq!(s.phase(), Phase::Serving);
+    assert!(!s.in_handshake());
     assert_eq!(backend.log().specs[0].name, "palmrest wheel");
 
     let fed = s.handle(T0, events(0, vec![wheel(-1), Event::SYNC]));
-    assert!(matches!(fed, Handled::Go(None)));
+    assert!(matches!(fed, Ok(None)));
     assert_eq!(backend.log().writes, [(0, vec![wheel(-1), Event::SYNC])]);
 
     drop(s);
@@ -73,11 +67,12 @@ fn only_the_events_inside_the_ceiling_reach_the_kernel() {
     let backend = FakeBackend::new();
     let admission = all();
     let mut s = Session::new(&backend, &admission);
-    s.handle(T0, Request::Create(Create::keys(vec![30, 29])));
+    s.handle(T0, Request::Create(Create::keys(vec![30, 29])))
+        .expect("the set-up step is accepted");
     let typed = Event::new(EV_KEY, 30, 1);
     let ctrl = Event::new(EV_KEY, 29, 1);
     let handled = s.handle(T0, events(0, vec![typed, ctrl, typed, Event::SYNC]));
-    assert!(matches!(handled, Handled::Go(_)));
+    assert!(handled.is_ok());
     // The letter before control is held is dropped; the same letter after it goes through.
     assert_eq!(backend.log().writes, [(0, vec![ctrl, typed, Event::SYNC])]);
     assert_eq!(s.stats().denied_events, 1);
@@ -88,14 +83,15 @@ fn a_destroyed_device_is_gone_and_events_for_it_end_the_connection() {
     let backend = FakeBackend::new();
     let admission = all();
     let mut s = Session::new(&backend, &admission);
-    s.handle(T0, Request::Create(Create::wheel()));
+    s.handle(T0, Request::Create(Create::wheel()))
+        .expect("the set-up step is accepted");
     let gone = s.handle(
         T0,
         Request::Destroy {
             device: DeviceId(0),
         },
     );
-    assert!(matches!(gone, Handled::Go(None)));
+    assert!(matches!(gone, Ok(None)));
     assert_eq!(s.held(), 0);
     assert_eq!(backend.log().fates, [Fate::Destroyed]);
     let after = s.handle(T0, events(0, vec![wheel(1)]));
@@ -109,7 +105,7 @@ fn a_handed_device_leaves_the_service_and_is_not_filtered() {
     let mut s = Session::new(&backend, &admission);
     let made = s.handle(T0, Request::Create(Create::keyboard()));
     assert_eq!(created(&made), Some((DeviceId(0), Delivery::Handed)));
-    assert!(matches!(made, Handled::Go(Some(Outgoing::Handed { .. }))));
+    assert!(matches!(made, Ok(Some(Outgoing { fd: Some(_), .. }))));
     assert_eq!(s.held(), 0, "the client owns it now");
     assert_eq!(backend.log().fates, [Fate::Handed]);
     assert_eq!(backend.log().specs[0].name, "keycap keyboard");
@@ -142,7 +138,7 @@ fn a_kind_the_caller_may_not_have_is_refused_and_nothing_is_made() {
     let admission = AllowKinds(vec![Kind::PalmrestWheel]);
     let mut s = Session::new(&backend, &admission);
     let handled = s.handle(T0, Request::Create(Create::keyboard()));
-    let Handled::Refuse { reason, note } = handled else {
+    let Err(Refused { reason, note }) = handled else {
         panic!("a refusal is noted for the log");
     };
     assert_eq!(reason, Reason::NotAllowed);
@@ -193,7 +189,8 @@ fn handed_devices_and_creations_are_counted_for_the_life_of_the_connection() {
     let mut ids = Vec::new();
     for _ in 0..MAX_CREATES_PER_CONNECTION {
         let (id, _) = created(&s.handle(T0, Request::Create(Create::wheel()))).expect("made");
-        s.handle(T0, Request::Destroy { device: id });
+        s.handle(T0, Request::Destroy { device: id })
+            .expect("the set-up step is accepted");
         ids.push(id.0);
     }
     assert_eq!(ids, (0..MAX_CREATES_PER_CONNECTION).collect::<Vec<_>>());
@@ -206,11 +203,12 @@ fn events_above_the_rate_are_dropped_counted_and_a_sustained_flood_is_cut() {
     let backend = FakeBackend::new();
     let admission = all();
     let mut s = Session::new(&backend, &admission);
-    s.handle(T0, Request::Create(Create::wheel()));
+    s.handle(T0, Request::Create(Create::wheel()))
+        .expect("the set-up step is accepted");
     let one = || events(0, vec![wheel(1), Event::SYNC]);
     // A burst at one instant: the first EVENT_BURST pass, the rest are dropped without ending the connection.
     for _ in 0..100 {
-        assert!(matches!(s.handle(T0, one()), Handled::Go(_)));
+        assert!(s.handle(T0, one()).is_ok());
     }
     assert_eq!(backend.log().writes.len() as u64, EVENT_BURST);
     assert_eq!(s.stats().dropped_datagrams, 100 - EVENT_BURST);
@@ -233,7 +231,8 @@ fn a_peer_that_keeps_sending_what_the_ceiling_refuses_is_cut() {
     let backend = FakeBackend::new();
     let admission = all();
     let mut s = Session::new(&backend, &admission);
-    s.handle(T0, Request::Create(Create::wheel()));
+    s.handle(T0, Request::Create(Create::wheel()))
+        .expect("the set-up step is accepted");
     let hostile = vec![Event::new(EV_KEY, 30, 1); 60];
     let mut ms = 0;
     let mut ended = None;
@@ -258,7 +257,8 @@ fn a_failing_write_ends_the_connection_with_a_reason() {
     let backend = FakeBackend::new();
     let admission = all();
     let mut s = Session::new(&backend, &admission);
-    s.handle(T0, Request::Create(Create::wheel()));
+    s.handle(T0, Request::Create(Create::wheel()))
+        .expect("the set-up step is accepted");
     backend.log().fail_write = Some(std::io::ErrorKind::BrokenPipe);
     let handled = s.handle(T0, events(0, vec![wheel(1), Event::SYNC]));
     assert_eq!(refused(&handled), Some(Reason::Unavailable));
@@ -269,13 +269,16 @@ fn devices_of_one_connection_are_independent() {
     let backend = FakeBackend::new();
     let admission = all();
     let mut s = Session::new(&backend, &admission);
-    s.handle(T0, Request::Create(Create::touchpad()));
-    s.handle(T0, Request::Create(Create::wheel()));
+    s.handle(T0, Request::Create(Create::touchpad()))
+        .expect("the set-up step is accepted");
+    s.handle(T0, Request::Create(Create::wheel()))
+        .expect("the set-up step is accepted");
     // A wheel event sent to the touchpad is outside the touchpad's ceiling.
     let wrong = s.handle(T0, events(0, vec![wheel(1)]));
-    assert!(matches!(wrong, Handled::Go(_)));
+    assert!(wrong.is_ok());
     assert!(backend.log().writes.is_empty());
-    s.handle(T0, events(1, vec![wheel(1)]));
+    s.handle(T0, events(1, vec![wheel(1)]))
+        .expect("the set-up step is accepted");
     assert_eq!(backend.log().writes, [(1, vec![wheel(1)])]);
 }
 

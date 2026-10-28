@@ -1,6 +1,6 @@
 //! palmrest's wheel: four relative axes and nothing else.
 
-use super::filter::{Denial, Filter, Verdict};
+use super::filter::{Denial, Filter};
 use super::{Plan, Route};
 use crate::codes::{
     EV_REL, EV_SYN, REL_HWHEEL, REL_HWHEEL_HI_RES, REL_WHEEL, REL_WHEEL_HI_RES, SYN_REPORT,
@@ -30,16 +30,16 @@ pub(super) fn plan(maker: Maker) -> Plan {
     }
 }
 
-pub(super) fn check(event: Event) -> Verdict {
+pub(super) fn check(event: Event) -> Result<Event, Denial> {
     match (event.kind, event.code) {
-        (EV_SYN, SYN_REPORT) if event.value == 0 => Verdict::Pass(event),
+        (EV_SYN, SYN_REPORT) if event.value == 0 => Ok(event),
         (EV_REL, code) if AXES.contains(&code) => {
             if event.value.unsigned_abs() <= MAX_WHEEL_MAGNITUDE.unsigned_abs() {
-                Verdict::Pass(event)
+                Ok(event)
             } else {
-                Verdict::Deny(Denial::OutOfRange)
+                Err(Denial::OutOfRange)
             }
         }
-        _ => Verdict::Deny(Denial::NotAllowed),
+        _ => Err(Denial::NotAllowed),
     }
 }

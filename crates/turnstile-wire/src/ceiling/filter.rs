@@ -23,16 +23,6 @@ pub enum Denial {
     TooManyKeys,
 }
 
-/// What the ceiling says about one event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Verdict {
-    /// Write this event (a position outside the range is clamped into it).
-    Pass(Event),
-    /// Do not write it.
-    Deny(Denial),
-}
-
 /// The events that passed and the reasons the others did not.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Filtered {
@@ -54,8 +44,9 @@ pub enum Filter {
 }
 
 impl Filter {
-    /// Judges one event and updates the state it tracks.
-    pub fn check(&mut self, event: Event) -> Verdict {
+    /// Judges one event and updates the state it tracks: the event to write (a position outside the
+    /// range is clamped into it) or the reason it is not written.
+    pub fn check(&mut self, event: Event) -> Result<Event, Denial> {
         match self {
             Self::Touchpad(state) => state.check(event),
             Self::Wheel => wheel::check(event),
@@ -67,8 +58,8 @@ impl Filter {
     pub fn apply(&mut self, events: &[Event]) -> Filtered {
         events.iter().fold(Filtered::default(), |mut out, &event| {
             match self.check(event) {
-                Verdict::Pass(e) => out.pass.push(e),
-                Verdict::Deny(why) => out.denied.push(why),
+                Ok(e) => out.pass.push(e),
+                Err(why) => out.denied.push(why),
             }
             out
         })

@@ -1,6 +1,6 @@
 use peephole_core::{CgroupPath, Pid, Uid};
 use turnstile::identity::seat::{SeatFile, SeatSource, parse_active_uid};
-use turnstile::identity::{ActiveUid, Caller, Credential};
+use turnstile::identity::{ActiveUid, Caller};
 
 #[test]
 fn the_active_user_is_the_active_uid_line() {
@@ -49,7 +49,7 @@ fn a_caller_is_described_for_the_log_without_trusting_it() {
         uid: Uid::new(1000),
         cgroup: CgroupPath::new("/").expect("a cgroup path"),
         image: None,
-        credential: Credential::Unlisted,
+        credential: None,
     };
     assert_eq!(caller.describe(), "pid=7 uid=1000 image=?");
 }

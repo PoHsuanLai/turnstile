@@ -11,7 +11,7 @@ use crate::admit::admit;
 use crate::backend::Backend;
 use crate::clock::Clock;
 use crate::identity::{Authority, SeatSource};
-use crate::idle::{Idle, Idling};
+use crate::idle::Idle;
 use crate::journal::{self, kv};
 use crate::link;
 use crate::pending::{Caps, Pending};
@@ -102,7 +102,7 @@ where
         let mut idle = Idle::new(limit_ms);
         loop {
             let busy = slots.open() + pending.count();
-            if idle.observe(self.context.clock.now(), busy) == Idling::Exit {
+            if idle.observe(self.context.clock.now(), busy) {
                 return Ok(());
             }
             if self.waiting_connection()? {

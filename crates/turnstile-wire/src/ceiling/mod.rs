@@ -10,7 +10,7 @@ mod keys;
 mod touchpad;
 mod wheel;
 
-pub use filter::{Denial, Filter, Filtered, Verdict};
+pub use filter::{Denial, Filter, Filtered};
 pub use keycap::{KEYBOARD_NAME, POINTER_SUFFIX};
 
 use crate::message::Create;

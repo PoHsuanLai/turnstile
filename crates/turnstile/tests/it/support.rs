@@ -25,7 +25,7 @@ pub(crate) fn listed(role: &str, proof: Proof, uid: Uid, cgroup: &str) -> Caller
         uid,
         cgroup: CgroupPath::new(cgroup).expect("a cgroup path"),
         image: Some(ExePath::new("/usr/local/bin/x").expect("an image path")),
-        credential: Credential::Listed { role, proof },
+        credential: Some(Credential { role, proof }),
     }
 }
 

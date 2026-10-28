@@ -25,13 +25,6 @@ pub enum Admit {
     Cut,
 }
 
-/// How long the current excess has lasted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Flood {
-    Quiet,
-    Since { start: Millis, last: Millis },
-}
-
 /// A token bucket of [`EVENT_BURST`] datagrams refilled at [`EVENT_DATAGRAMS_PER_SECOND`], plus the
 /// count of how long the excess has gone on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,7 +32,8 @@ pub struct Limiter {
     /// Thousandths of a datagram, so the refill stays in whole numbers.
     tokens: u64,
     at: Millis,
-    flood: Flood,
+    /// When the current excess began and when it was last seen; `None` when there is none.
+    flood: Option<(Millis, Millis)>,
 }
 
 const MILLI: u64 = 1_000;
@@ -50,7 +44,7 @@ impl Limiter {
         Self {
             tokens: EVENT_BURST * MILLI,
             at: now,
-            flood: Flood::Quiet,
+            flood: None,
         }
     }
 
@@ -72,10 +66,10 @@ impl Limiter {
 
     fn over(&mut self, now: Millis) -> Admit {
         let start = match self.flood {
-            Flood::Since { start, last } if now.since(last) <= FLOOD_GAP_MS => start,
-            Flood::Since { .. } | Flood::Quiet => now,
+            Some((start, last)) if now.since(last) <= FLOOD_GAP_MS => start,
+            _ => now,
         };
-        self.flood = Flood::Since { start, last: now };
+        self.flood = Some((start, now));
         if now.since(start) >= FLOOD_CUT_MS {
             Admit::Cut
         } else {

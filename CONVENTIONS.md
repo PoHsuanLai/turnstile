@@ -1,8 +1,8 @@
 # Conventions
 
-turnstile follows the program's shared conventions: small typed structs, enums instead of `bool`
-fields and parameters, typed errors (`thiserror`), no `unsafe`, short files, doc comments on every
-public item, tests that never touch the real system. `ARCHITECTURE.md` here has the crate map and
+turnstile follows the program's shared conventions: small typed structs, plain Rust types first,
+typed errors (`thiserror`), no `unsafe`, short files, doc comments on every public item, tests that
+never touch the real system. `ARCHITECTURE.md` here has the crate map and
 the seams.
 
 1. **Library first.** `turnstile-wire` is pure and usable on its own; `turnstile-client` is a small
@@ -42,3 +42,11 @@ the seams.
 11. **`cargo fmt -p <crate>`** to write; the gate runs `cargo fmt --all --check`.
 12. **One test binary per crate** (`tests/it/main.rs`), tables over one-off cases. A test that
     makes a real device is `#[ignore]`d with the reason, and lives on the owner's manual queue.
+13. **Types: plain Rust first.** A `bool` is fine for a field, a return value, a local or a private
+    function; use an enum only when a public function would read as `f(true, false)`, a third state
+    is realistic, or the value is on the wire. Newtypes only when they hold a rule (parsed or
+    validated, a unit, an id that must not be mixed with another). Enums are for closed sets the
+    code branches on; a set that grows is data. One fact, one type: no mirror enums across
+    crates, and a field-less view of an enum is a method. A two-way outcome is `Result` or
+    `Option`, not a two-arm enum. A trait with default methods carries behaviour that differs by
+    case; `Box<dyn Trait>` is fine when the implementation is picked at run time.
